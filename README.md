@@ -64,7 +64,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 
 ### 2. 클론 및 패키지 설치
 ```bash
-git clone https://github.com/YourRepo/ProjectLucia_Server.git
+git clone https://github.com/MelissaJSM/ProjectLucia_Server_HiyoriEdition.git
 cd ProjectLucia_Server
 
 #가상 환경 생성 (아나콘다 혹은 직접)
