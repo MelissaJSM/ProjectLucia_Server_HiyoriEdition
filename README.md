@@ -81,14 +81,10 @@ uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0
 linux 의 경우
 uv pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl
 uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.18/exllamav3-0.0.18+cu128.torch2.8.0-cp310-cp310-linux_x86_64.whl
-
-
-
-
-
-
 ```
-*(참고: `ExLlamaV3`, `GPT-SoVITS` 관련 의존성은 각 프로젝트의 가이드를 참고하여 추가 설치가 필요할 수 있습니다.)*
+
+### 3. 추가 라이브러리 설치
+(링크) 를 다운로드하여 해당 경로의 Core 폴더내에 압축을 해제합니다. (하단 프로젝트 구조 참고)
 
 ### 3. 데이터베이스 설정
 MySQL에 접속하여 데이터베이스를 생성합니다.
