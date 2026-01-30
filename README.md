@@ -59,7 +59,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 
 ### 1. 필수 요구 사항
 *   **OS**: Ubuntu 22.04 (Windows 호환 가능)
-*   **GPU**: NVIDIA GPU (CUDA 11.8+ 권장, VRAM 8GB 이상 권장)
+*   **GPU**: NVIDIA GPU (CUDA 12.8+ 권장, VRAM 12GB 이상 권장)
 *   **Database**: MySQL Server 설치 및 실행 필요
 
 ### 2. 클론 및 패키지 설치
@@ -110,7 +110,7 @@ python ui_main.py
 *   상태 표시등이 모두 **초록색(Running)**으로 바뀌면 준비 완료입니다.
 
 ### 4. 클라이언트 연결
-*   Unity, Unreal Engine, 또는 웹 클라이언트에서 `ws://<SERVER_IP>:3545/ws`로 WebSocket 연결을 시도합니다.
+*   Unity에서 자동으로 연결을 받습니다.
 
 ---
 
