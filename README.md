@@ -84,7 +84,7 @@ uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0
 ```
 
 ### 3. 추가 라이브러리 설치
-(링크) 를 다운로드하여 해당 경로의 Core 폴더내에 압축을 해제합니다. (하단 프로젝트 구조 참고)
+[(라이브러리)](https://drive.google.com/file/d/1IkbQYAytgA_tgT_yggHDYi5g_gXiCN88/view?usp=sharing) 를 다운로드하여 해당 경로의 Core 폴더내에 압축을 해제합니다. (하단 프로젝트 구조 참고)
 
 ### 3. 데이터베이스 설정
 MySQL에 접속하여 데이터베이스를 생성합니다.
