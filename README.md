@@ -67,12 +67,26 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 git clone https://github.com/YourRepo/ProjectLucia_Server.git
 cd ProjectLucia_Server
 
-# 가상환경 생성 (권장)
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+#가상 환경 생성 (아나콘다 혹은 직접)
 
 # 의존성 설치
-pip install -r requirements.txt
+pip install uv
+
+uv pip install notebook ipywidgets hf_xet wordsegment python-multipart PyQt5 pytz flask ddgs nvidia-ml-py trafilatura mysql-connector-python fastapi transformers soundfile "uvicorn[standard]" ffmpeg-python librosa pytorch_lightning matplotlib x_transformers peft jieba fast_langdetect g2p_en split_lang cn2an pypinyin jieba_fast pyopenjtalk jamo ko_pron g2pk2 python-mecab-ko onnxruntime-gpu opencc
+
+windows 의 경우
+uv pip install https://github.com/kingbri1/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu128torch2.8.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.18/exllamav3-0.0.18+cu128.torch2.8.0-cp310-cp310-win_amd64.whl
+
+linux 의 경우
+uv pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl
+uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.18/exllamav3-0.0.18+cu128.torch2.8.0-cp310-cp310-linux_x86_64.whl
+
+
+
+
+
+
 ```
 *(참고: `ExLlamaV3`, `GPT-SoVITS` 관련 의존성은 각 프로젝트의 가이드를 참고하여 추가 설치가 필요할 수 있습니다.)*
 
