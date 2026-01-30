@@ -58,7 +58,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 ## 📥 설치 방법
 
 ### 1. 필수 요구 사항
-*   **OS**: Windows 10/11 (Linux 호환 가능하나 GUI는 Windows 최적화)
+*   **OS**: Ubuntu 22.04 (Windows 호환 가능)
 *   **GPU**: NVIDIA GPU (CUDA 11.8+ 권장, VRAM 8GB 이상 권장)
 *   **Database**: MySQL Server 설치 및 실행 필요
 
