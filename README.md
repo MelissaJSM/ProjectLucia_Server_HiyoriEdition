@@ -93,6 +93,10 @@ MySQL을 설치 한 후 DB.SQL 파일을 임포트하여 구성합니다.
 ### 4. SURXNG 설치
 [(SURXNG)](https://docs.searxng.org/admin/installation.html) 에서 다운로드 이후 연결을 하면 surxng 기반 검색을, 미설치시 DuckDuckGo 기반으로 검색을 시도합니다.
 
+### 0. Docker 환경 설치
+[(Finetuning)](https://github.com/MelissaJSM/ProjectLucia_Finetuning.git) 의 링크에서 Docker 설치환경을 그대로 따라하시면 됩니다. 
+서버와 파인튜닝 Docker 환경을 공유합니다.
+
 ---
 
 ## 🚀 사용 방법
