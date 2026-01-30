@@ -147,3 +147,6 @@ ProjectLucia_Server/
 ## ⚠️ 주의 사항
 *   **포트 충돌**: 기본 포트(3545, 3546, 8000, 9880)가 사용 중인지 확인하세요.
 *   **GPU 메모리**: LLM과 TTS 모델을 동시에 로드하므로 충분한 VRAM이 필요합니다.
+
+---
+*Developed by MelissaJ*
