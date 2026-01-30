@@ -89,6 +89,9 @@ uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0
 ### 3. 데이터베이스 설정
 MySQL을 설치 한 후 DB.SQL 파일을 임포트하여 구성합니다.
 
+### 4. SURXNG 설치
+[(SURXNG)](https://docs.searxng.org/admin/installation.html) 에서 다운로드 이후 연결을 하면 surxng 기반 검색을, 미설치시 DuckDuckGo 기반으로 검색을 시도합니다.
+
 ---
 
 ## 🚀 사용 방법
@@ -143,4 +146,4 @@ ProjectLucia_Server/
 
 ## ⚠️ 주의 사항
 *   **포트 충돌**: 기본 포트(3545, 3546, 8000, 9880)가 사용 중인지 확인하세요.
-*   **GPU 메모리**: LLM과 TTS 모델을 동시에 로드하므로 충분한 VRAM이 필요합니다. 부족할 경우 `config.json`에서 모델 양자화(Cache Quantization) 옵션을 조절하세요.
+*   **GPU 메모리**: LLM과 TTS 모델을 동시에 로드하므로 충분한 VRAM이 필요합니다.
