@@ -731,13 +731,13 @@ class SystemController:
         set_spin("LLMFrequencyPenaltySpinBox", data.get("LLM_FREQUENCY_PENALTY", data.get("llm_frequency_penalty")))
 
         # TTS 설정
-        set_combo("TextSplitMethodComboBox", data.get("TEXT_SPLIT_METHOD", data.get("tts_text_split_method")))
+        set_combo("TextSplitMethodComboBox", data.get("TEXT_SPLIT_METHOD", data.get("tts_text_split_method", "cut5")))
         set_spin("BatchSizeSpinBox", data.get("BATCH_SIZE", data.get("tts_batch_size")))
         set_radio(("ParallelInferRadioButtonYes", "ParallelInferRadioButtonNo"), data.get("PARALLEL_INFER", data.get("tts_parallel_infer")))
         set_radio(("SplitBucketRadioButtonYes", "SplitBucketRadioButtonNo"), data.get("SPLIT_BUCKET", data.get("tts_split_bucket")))
         set_spin("SeedSpinBox", data.get("SEED", data.get("tts_seed")))
-        set_spin("TopKSpinBox", data.get("TOP_K", data.get("tts_top_k")))
-        set_spin("TopPSpinBox", data.get("TOP_P", data.get("tts_top_p")))
+        set_spin("TopKSpinBox", data.get("TOP_K", data.get("tts_top_k", 5)))
+        set_spin("TopPSpinBox", data.get("TOP_P", data.get("tts_top_p", 0.85)))
         set_spin("TemperatureSpinBox", data.get("TEMPERATURE", data.get("tts_temperature")))
         set_spin("RepetitionPenaltySpinBox", data.get("REPETITION_PENALTY", data.get("tts_repetition_penalty")))
         set_spin("SpeedFactorSpinBox", data.get("SPEED_FACTOR", data.get("tts_speed_factor")))

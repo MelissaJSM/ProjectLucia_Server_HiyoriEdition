@@ -3094,11 +3094,6 @@ p, li { white-space: pre-wrap; }
             </property>
             <item>
              <property name="text">
-              <string>auto_cut</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
               <string>cut0</string>
              </property>
             </item>
