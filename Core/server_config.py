@@ -88,11 +88,6 @@ class EMOTION:
     LOCATION_EMOTION : str = ""
     EMOTION_NAME : str = ""
 
-class RAG:
-    """RAG (Retrieval-Augmented Generation) 서버 설정"""
-    RAG_IP: str = ""
-    RAG_PORT: int = 8080
-
 class SQL:
     """MySQL 데이터베이스 연결 설정"""
     MYSQL_HOST: str = ""
@@ -145,10 +140,6 @@ def _apply(data: dict):
     # EMOTION
     EMOTION.EMOTION_NAME = data.get("EMOTION_NAME", "")
     EMOTION.LOCATION_EMOTION = data.get("LOCATION_EMOTION", "")
-
-    # RAG
-    RAG.RAG_IP = data.get("RAG_IP", "")
-    RAG.RAG_PORT = int(data.get("RAG_PORT", 8080))
 
     # SQL
     SQL.MYSQL_HOST = data.get("MYSQL_HOST", "")

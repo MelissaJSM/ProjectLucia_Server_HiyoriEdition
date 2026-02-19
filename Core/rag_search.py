@@ -1,21 +1,22 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Core/rag_search.py
-# 하이브리드 검색 모듈 (SearXNG 우선 시도 -> 실패 시 DuckDuckGo 전환)
-# Docker 기반의 SearXNG가 있으면 고품질 검색을, 없으면 간편한 DDG 검색을 사용합니다.
+# 하이브리드 검색 모듈 (Google MCP Router -> DuckDuckGo)
 # ──────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
 
 import sys
 import time
 import logging
-import requests
+import json
+import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 
 # DuckDuckGo 검색 라이브러리
 from ddgs import DDGS
 
-# 프로젝트 설정
-import Core.server_config as server_config
+# MCP 관련 라이브러리 (pip install mcp noapi-google-search-mcp)
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 로거 설정
@@ -23,7 +24,6 @@ import Core.server_config as server_config
 logger = logging.getLogger("llm.rag_search")
 logger.setLevel(logging.INFO)
 
-# 서버 환경에서 로그가 출력되지 않는 문제를 해결하기 위해 핸들러 강제 추가
 if not logger.handlers:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
@@ -32,12 +32,19 @@ if not logger.handlers:
 # ──────────────────────────────────────────────────────────────────────────────
 # 설정 및 상수
 # ──────────────────────────────────────────────────────────────────────────────
-SEARXNG_TIMEOUT = 5.0
-
-# 검색 지역 및 안전 검색 설정
-REGION_SEARX = "ko-KR"
 REGION_DDG = "kr-ko"
 SAFESEARCH = "moderate"
+
+# 검색 트리거 키워드 정의
+KEYWORDS_WEATHER = ["날씨", "기온", "비 오나", "눈 오나", "weather"]
+KEYWORDS_MAP = ["위치", "지도", "어디", "맛집", "가는 길", "거리"]
+KEYWORDS_NEWS = ["뉴스", "속보", "사건", "news"]
+KEYWORDS_FINANCE = ["주식", "주가", "코인", "환율", "삼성전자", "bitcoin", "stock"]
+KEYWORDS_SHOPPING = ["가격", "얼마", "최저가", "싸게 사는"]
+KEYWORDS_GENERAL = ["검색", "찾아", "search", "find", "알려줘", "뭐야", "누구야"]
+
+# 전체 키워드 통합 (검색 여부 판단용)
+ALL_SEARCH_KEYWORDS = KEYWORDS_WEATHER + KEYWORDS_MAP + KEYWORDS_NEWS + KEYWORDS_FINANCE + KEYWORDS_SHOPPING + KEYWORDS_GENERAL
 
 
 def now_utc_iso() -> str:
@@ -45,132 +52,178 @@ def now_utc_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# [신규] RAG 서버 상태 확인
-# ──────────────────────────────────────────────────────────────────────────────
-def check_rag_status(ip: str, port: int) -> Tuple[bool, str]:
-    """
-    SearXNG 서버의 상태를 확인합니다.
-    
-    Args:
-        ip (str): 서버 IP 주소
-        port (int): 서버 포트 번호
-        
-    Returns:
-        Tuple[bool, str]: (성공 여부, 메시지)
-    """
-    if not ip:
-        return False, "IP 주소가 설정되지 않았습니다."
-    
-    url = f"http://{ip}:{port}/"
-    try:
-        response = requests.get(url, timeout=SEARXNG_TIMEOUT)
-        # SearXNG는 보통 200 OK와 함께 HTML 페이지를 반환합니다.
-        if response.status_code == 200:
-            return True, "연결 성공"
-        else:
-            return False, f"연결 실패 (HTTP {response.status_code})"
-    except requests.exceptions.RequestException as e:
-        return False, f"연결 실패 ({type(e).__name__})"
+def is_search_needed(query: str) -> bool:
+    """쿼리에 검색 키워드가 포함되어 있는지 확인합니다."""
+    q_lower = query.lower()
+    return any(k in q_lower for k in ALL_SEARCH_KEYWORDS)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 검색 엔진 1: SearXNG (Docker 기반)
+# [신규] 검색 엔진 0: Google MCP (Router + Fallback 적용)
 # ──────────────────────────────────────────────────────────────────────────────
-def fetch_searxng(query: str, max_results: int) -> List[Dict[str, Any]]:
+async def _run_mcp_google_router(query: str, max_results: int) -> Tuple[str, str]:
     """
-    SearXNG 인스턴스를 통해 검색을 수행합니다.
+    비동기 함수: 질문 내용을 분석하여 적절한 Google 도구를 선택해 실행합니다.
+    Returns: (결과 텍스트, 사용된 도구 이름)
     """
-    # [중요] 브라우저인 척 위장 (403 에러 방지)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
+    # MCP 서버 실행 설정
+    server_params = StdioServerParameters(
+        command="noapi-google-search-mcp",
+        args=[],
+        env=None
+    )
 
-    # 설정에서 IP/PORT 가져와서 URL 구성
-    rag_ip = getattr(server_config.RAG, "RAG_IP", "")
-    rag_port = getattr(server_config.RAG, "RAG_PORT", 8080)
-    
-    # IP가 설정되지 않았으면 기본값 사용 (예: 오드로이드 IP)
-    if not rag_ip:
-        rag_ip = "192.168.35.97"
-        
-    searxng_url = f"http://{rag_ip}:{rag_port}/search"
+    # 1. 도구 라우팅 (Router) 로직
+    tool_name = None
+    tool_args = {}
 
-    try:
-        params = {
-            "q": query,
-            "format": "json",
-            "language": REGION_SEARX,
-            "categories": "general",
-            "safesearch": 1
+    q_lower = query.lower()
+
+    # [날씨] - location 인자 사용
+    if any(k in q_lower for k in KEYWORDS_WEATHER):
+        tool_name = "google_weather"
+        tool_args = {"location": query}
+
+    # [지도/위치/맛집]
+    elif any(k in q_lower for k in KEYWORDS_MAP):
+        tool_name = "google_maps"
+        tool_args = {"query": query, "num_results": max_results}
+
+    # [뉴스/속보]
+    elif any(k in q_lower for k in KEYWORDS_NEWS):
+        tool_name = "google_news"
+        tool_args = {"query": query, "num_results": max_results}
+
+    # [주식/금융]
+    elif any(k in q_lower for k in KEYWORDS_FINANCE):
+        tool_name = "google_finance"
+        tool_args = {"query": query}
+
+    # [쇼핑/가격]
+    elif any(k in q_lower for k in KEYWORDS_SHOPPING):
+        tool_name = "google_shopping"
+        tool_args = {"query": query, "num_results": max_results}
+
+    # [일반 검색] - 최후순위
+    elif any(k in q_lower for k in KEYWORDS_GENERAL):
+        tool_name = "google_search"
+        tool_args = {
+            "query": query,
+            "num_results": max_results,
+            "language": "ko",
+            "region": "kr"
         }
 
-        resp = requests.get(searxng_url, params=params, headers=headers, timeout=SEARXNG_TIMEOUT)
+    # 키워드 매칭 실패 시 검색하지 않음
+    if tool_name is None:
+        return "", "None"
 
-        if resp.status_code != 200:
-            logger.warning(f"⚠️ [SearXNG] Status {resp.status_code}: {resp.text[:50]}...")
+    logger.info(f"🛠️ [MCP Router] '{query}' -> 선택된 도구: {tool_name}")
+
+    # 2. 실제 실행
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            try:
+                # 선택된 도구 실행
+                result = await session.call_tool(tool_name, arguments=tool_args)
+
+                # 결과가 있으면 반환
+                if result.content:
+                    # 텍스트 추출 로직 강화
+                    extracted_text = ""
+                    for content in result.content:
+                        if hasattr(content, "text") and content.text:
+                            extracted_text += content.text + "\n"
+
+                    if extracted_text.strip():
+                        return extracted_text.strip(), tool_name
+                    else:
+                        logger.warning(f"⚠️ [MCP Warning] {tool_name} 실행 완료되었으나 텍스트 내용이 비어있습니다.")
+
+            except Exception as e:
+                logger.warning(f"⚠️ [MCP Error] {tool_name} 실행 실패 ({e}). 일반 검색(google_search)으로 전환합니다.")
+
+                # 실패 시 Fallback: 일반 검색 재시도
+                if tool_name != "google_search":
+                    try:
+                        fallback_args = {
+                            "query": query,
+                            "num_results": max_results,
+                            "language": "ko",
+                            "region": "kr"
+                        }
+                        result = await session.call_tool("google_search", arguments=fallback_args)
+
+                        extracted_text = ""
+                        if result.content:
+                            for content in result.content:
+                                if hasattr(content, "text") and content.text:
+                                    extracted_text += content.text + "\n"
+
+                        if extracted_text.strip():
+                            return extracted_text.strip(), "google_search (Fallback)"
+
+                    except Exception as fallback_e:
+                        logger.error(f"❌ [MCP Error] Fallback 검색도 실패: {fallback_e}")
+
+            return "", "None"
+
+
+def fetch_google_mcp(query: str, max_results: int) -> List[Dict[str, Any]]:
+    """
+    Google MCP를 통해 검색을 수행하고 결과를 반환합니다. (동기 래퍼)
+    """
+    logger.info(f"🚀 [MCP] Google Search 시작: {query}")
+    docs = []
+
+    try:
+        # 비동기 함수 실행
+        raw_text, tool_used = asyncio.run(_run_mcp_google_router(query, max_results))
+
+        if not raw_text:
             return []
 
-        data = resp.json()
-        raw_results = data.get("results", [])
-
-        docs = []
-        for i, r in enumerate(raw_results[:max_results], 1):
-            content = r.get("content", "")
-            if not content: continue
-
-            docs.append({
-                "index": i,
-                "title": r.get("title", ""),
-                "snippet": content,
-                "url": r.get("url", ""),
-                "source": "SearXNG"
-            })
-        return docs
+        # 결과를 하나의 문서로 포맷팅
+        docs.append({
+            "index": 1,
+            "title": f"Google Result ({tool_used})",
+            "snippet": raw_text,
+            "url": "google.com",
+            "source": f"Google MCP [{tool_used}]"
+        })
 
     except Exception as e:
-        logger.warning(f"⚠️ [Hybrid-RAG] SearXNG unavailable ({searxng_url}): {e}")
-
-    return []
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 검색 엔진 2: DuckDuckGo (Fallback)
-# ──────────────────────────────────────────────────────────────────────────────
-def fetch_duckduckgo(query: str, max_results: int) -> List[Dict[str, Any]]:
-    """
-    DuckDuckGo를 통해 검색을 수행합니다. (SearXNG 실패 시 사용)
-    """
-    docs = []
-    try:
-        with DDGS() as ddgs:
-            results = ddgs.text(
-                query=query,
-                region=REGION_DDG,
-                safesearch=SAFESEARCH,
-                backend="auto",  # [수정] lite -> auto (에러 방지)
-                max_results=max_results
-            )
-
-            for i, r in enumerate(results, 1):
-                body = r.get("body", "")
-                if not body: continue
-
-                docs.append({
-                    "index": i,
-                    "title": r.get("title", ""),
-                    "snippet": body,
-                    "url": r.get("href", ""),
-                    "source": "DuckDuckGo"
-                })
-    except Exception as e:
-        logger.error(f"❌ [Hybrid-RAG] DuckDuckGo fallback failed: {e}")
+        logger.error(f"❌ [MCP] 실행 중 치명적 오류: {e}")
+        return []
 
     return docs
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 메인 오케스트레이터 (검색 수행 및 결과 조합)
+# 검색 엔진 1: DuckDuckGo (Fallback)
+# ──────────────────────────────────────────────────────────────────────────────
+def fetch_duckduckgo(query: str, max_results: int) -> List[Dict[str, Any]]:
+    docs = []
+    try:
+        with DDGS() as ddgs:
+            results = ddgs.text(query=query, region=REGION_DDG, safesearch=SAFESEARCH, backend="auto",
+                                max_results=max_results)
+            for i, r in enumerate(results, 1):
+                body = r.get("body", "")
+                if not body: continue
+                docs.append({
+                    "index": i, "title": r.get("title", ""), "snippet": body,
+                    "url": r.get("href", ""), "source": "DuckDuckGo"
+                })
+    except Exception as e:
+        logger.error(f"❌ [Hybrid-RAG] DuckDuckGo fallback failed: {e}")
+    return docs
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 메인 오케스트레이터
 # ──────────────────────────────────────────────────────────────────────────────
 def preprocess_webrag(
         question: str,
@@ -180,30 +233,40 @@ def preprocess_webrag(
         use_embedding: bool = False,
         select_top: bool = False
 ) -> Dict[str, Any]:
-    """
-    RAG 검색을 수행하고 결과를 전처리하여 반환합니다.
-    
-    1. SearXNG 검색 시도
-    2. 실패 시 DuckDuckGo 검색 시도
-    3. 검색 결과를 텍스트로 포맷팅
-    """
     q_for_search = (search_query or question).strip()
+
+    # [검색 의도 파악] 키워드가 없으면 검색을 수행하지 않음
+    if not is_search_needed(q_for_search):
+        # logger.info(f"🚫 [Hybrid-RAG] 검색 키워드 미발견. 검색을 건너뜁니다. ('{q_for_search}')")
+        return {
+            "query": question,
+            "search_query": q_for_search,
+            "generated_at": now_utc_iso(),
+            "docs": [],
+            "best_text": "검색 결과가 없습니다. (검색어 미감지)",
+            "debug_info": {"engine_used": "None", "doc_count": 0}
+        }
+
     logger.info(f"🔹 [Hybrid-RAG] Searching for: {q_for_search}")
-    
+
     used_engine = "None"
+    docs = []
 
-    # 1. SearXNG 시도
-    docs = fetch_searxng(q_for_search, max_results_search)
+    # 1순위: Google MCP (Router 적용됨)
+    if not docs:
+        docs = fetch_google_mcp(q_for_search, max_results_search)
+        if docs:
+            # docs[0]['source']에 사용된 도구 이름이 들어있음 (예: Google MCP [google_weather])
+            used_engine = docs[0]['source']
 
-    if docs:
-        used_engine = "SearXNG (Odroid)"
-    else:
-        # 2. 실패 시 DuckDuckGo
+    # 2순위: DuckDuckGo (Google MCP 실패 시 Fallback)
+    # 키워드가 있어서 검색을 시도했으나 Google MCP가 실패한 경우에만 실행
+    if not docs:
         logger.info("🔸 [Hybrid-RAG] Switching to DuckDuckGo...")
         docs = fetch_duckduckgo(q_for_search, max_results_search)
-        used_engine = "DuckDuckGo (Fallback)"
+        if docs: used_engine = "DuckDuckGo (Fallback)"
 
-    # 3. 텍스트 조립
+    # 결과 텍스트 조립
     formatted_texts = []
     if docs:
         for d in docs:
@@ -217,13 +280,10 @@ def preprocess_webrag(
     else:
         final_context = "검색 결과가 없습니다."
 
-    # ─────────────────────────────────────────────────────────────
-    # [로그] 검색 결과 요약 출력
-    # ─────────────────────────────────────────────────────────────
+    # 로그 출력
     logger.info("=" * 40)
     logger.info(f"🔎 [RAG Status] Engine: {used_engine} | Docs: {len(docs)}")
     if docs:
-        # 첫 번째 검색 결과의 제목만 미리보기로 출력
         logger.info(f"📄 [Preview] Top 1: {docs[0]['title']}")
     else:
         logger.warning("❌ [Result] No documents found.")
@@ -240,9 +300,3 @@ def preprocess_webrag(
             "doc_count": len(docs)
         }
     }
-
-
-# (테스트용) 직접 실행 시 동작
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
-    preprocess_webrag(question="체인소맨 극장판 개봉일", max_results_search=5)

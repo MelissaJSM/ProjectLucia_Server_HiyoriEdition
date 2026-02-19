@@ -548,24 +548,10 @@ class SystemController:
 
     def on_rag_test_button(self):
         """RAG 서버 연결 테스트"""
-        ip = self.w.RAGIpLineEdit.text().strip()
-        port_text = self.w.RAGPortLineEdit.text().strip()
-        
-        self.w.RAGTestIPLabel.setText(f"IP : {ip}")
-        self.w.RAGTestPortLabel.setText(f"PORT : {port_text}")
-        
-        try:
-            port = int(port_text)
-        except ValueError:
-            self.w.RAGTestResultLabel.setText("결과 : FAIL (포트 오류)")
-            return
-
-        is_ok, msg = rag_search.check_rag_status(ip, port)
-        
-        if is_ok:
-            self.w.RAGTestResultLabel.setText("결과 : OK")
-        else:
-            self.w.RAGTestResultLabel.setText(f"결과 : FAIL ({msg})")
+        # Google MCP는 로컬 프로세스이므로 별도 연결 테스트가 필요 없음
+        # DuckDuckGo도 라이브러리 호출 방식이므로 테스트 생략 가능
+        # 기존 SearXNG 테스트 로직은 제거함
+        self.w.RAGTestResultLabel.setText("결과 : N/A (Google MCP 사용)")
 
     # ─────────────────────────────────────────────────────────────
     # 설정 로드 / 저장 (Config & DB)
@@ -638,9 +624,9 @@ class SystemController:
         self._set_text("CharacterFeedbackTextEdit", data.get("COMMAND_FEEDBACK", ""))
         self._set_text("CharacterSearchTextEdit",   data.get("COMMAND_SEARCH", ""))
 
-        # RAG
-        if hasattr(self.w, "RAGIpLineEdit"): self.w.RAGIpLineEdit.setText(data.get("RAG_IP", ""))
-        if hasattr(self.w, "RAGPortLineEdit"): self.w.RAGPortLineEdit.setText(str(data.get("RAG_PORT", 8080)))
+        # RAG (SearXNG 관련 설정 제거됨)
+        # if hasattr(self.w, "RAGIpLineEdit"): self.w.RAGIpLineEdit.setText(data.get("RAG_IP", ""))
+        # if hasattr(self.w, "RAGPortLineEdit"): self.w.RAGPortLineEdit.setText(str(data.get("RAG_PORT", 8080)))
 
         # [NEW] 모델 타입 라디오 버튼 반영
         model_type = data.get("LLM_MODEL_TYPE", "gemma") # 기본값 gemma
@@ -879,9 +865,9 @@ class SystemController:
             "COMMAND_FEEDBACK":  get_plain("CharacterFeedbackTextEdit"),
             "COMMAND_SEARCH":    get_plain("CharacterSearchTextEdit"),
 
-            # RAG
-            "RAG_IP": get_text("RAGIpLineEdit"),
-            "RAG_PORT": int(get_text("RAGPortLineEdit") or "8080"),
+            # RAG (SearXNG 관련 설정 제거됨)
+            # "RAG_IP": get_text("RAGIpLineEdit"),
+            # "RAG_PORT": int(get_text("RAGPortLineEdit") or "8080"),
             
             # GPU List
             "GPU_DEVICES": gpu_list

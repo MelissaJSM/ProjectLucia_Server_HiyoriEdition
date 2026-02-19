@@ -96,7 +96,7 @@ def get_all_vram_info() -> List[Dict[str, Any]]:
             infos.append({
                 "gpu_id": i,
                 "gpu_name": name,
-                "gpu_used": m.used // 1024 ** 2, # MB 단위
+                "gpu_used": m.used // 1024 ** 2,  # MB 단위
                 "gpu_total": m.total // 1024 ** 2
             })
         nvmlShutdown()
@@ -129,10 +129,11 @@ class AudioFileHandler(http.server.SimpleHTTPRequestHandler):
     생성된 오디오 파일을 제공하기 위한 간단한 HTTP 핸들러입니다.
     /audio/ 경로를 루트 경로로 매핑합니다.
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=AUDIO_SAVE_PATH, **kwargs)
 
-    def log_message(self, format, *args): pass # 로그 출력 억제
+    def log_message(self, format, *args): pass  # 로그 출력 억제
 
     def do_GET(self):
         if self.path.startswith("/audio/"): self.path = self.path.replace("/audio/", "/", 1)
@@ -179,7 +180,7 @@ class ConnectionManager:
             del self.active[client_id]
             del self.last_seen[client_id]
             print(f"[WS] disconnected: {client_id}")
-            
+
             # 연결 종료 시 해당 클라이언트의 상태 및 임시 파일 정리
             if client_id in client_states:
                 state = client_states.pop(client_id)
@@ -239,7 +240,7 @@ def init_server_settings():
 async def lifespan(app: FastAPI):
     """FastAPI 앱의 수명 주기 관리 (시작 시 초기화, 종료 시 정리)"""
     init_server_settings()
-    
+
     # 파일 서버 스레드 시작
     global _file_server_thread
     _file_server_thread = threading.Thread(target=start_file_server, daemon=True)
@@ -248,7 +249,7 @@ async def lifespan(app: FastAPI):
     # 하트비트 태스크 시작
     hb_task = asyncio.create_task(_heartbeat_loop())
     print("✅ Server Started")
-    
+
     try:
         yield
     finally:
@@ -279,12 +280,12 @@ async def wait_for_services(timeout: int = 60) -> bool:
     while time.time() - start_time < timeout:
         # 1. LLM Check
         llm_ok = await check_port_open(server_config.PORTS.LLAMA_HOST, server_config.PORTS.LLAMA_PORT)
-        
+
         # 2. TTS Check (TTS_ENABLE이 True일 때만 확인)
         tts_ok = True
         if server_config.TTS.TTS_ENABLE:
             tts_ok = await check_port_open(server_config.PORTS.TTS_HOST, server_config.PORTS.TTS_PORT)
-        
+
         # 3. Audio Check (Localhost)
         audio_ok = await check_port_open("127.0.0.1", FILE_SERVER_PORT)
 
@@ -556,13 +557,13 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                     def process_tts(text):
                         tts_text = re.sub(r'[^\u0000-\uFFFF]', '', text)
                         emo = analyze_emotion(text)
-                        
+
                         # TTS_ENABLE 체크
                         if server_config.TTS.TTS_ENABLE:
                             wav_bytes = text_to_speech(tts_text, emo)
                         else:
                             wav_bytes = None
-                            
+
                         return emo, wav_bytes
 
                     emo, wav_bytes = await asyncio.to_thread(process_tts, message_to_send)
@@ -620,14 +621,14 @@ async def handle_chat(websocket: WebSocket, data: dict):
     """
     일반 채팅(Chat) 요청 처리
     1. 사용자 입력 및 이미지 처리
-    2. LLM 응답 생성
+    2. LLM 응답 생성 (RAG 통합됨)
     3. 감정 분석 및 TTS 변환
     """
     text = data.get("text", "")
     is_emotion = bool(data.get("emotion"))
     img_ids = data.get("image_ids") or []
     if data.get("image_id"): img_ids.append(data.get("image_id"))
-    
+
     # 사용자 정보 추출
     user_info = {
         "name": data.get("user_name"),
@@ -647,6 +648,7 @@ async def handle_chat(websocket: WebSocket, data: dict):
     await websocket.send_json({"op": "status", "stage": "processing"})
 
     def process_chat():
+        # RAG 검색이 generate_llm_response 내부에서 자동으로 수행됨
         llm_out = generate_llm_response(
             user_input=text,
             recent_conversation=recent_logs,
@@ -657,13 +659,13 @@ async def handle_chat(websocket: WebSocket, data: dict):
         )
         tts_text = re.sub(r'[^\u0000-\uFFFF]', '', llm_out)
         emo_out = analyze_emotion(llm_out)
-        
+
         # TTS_ENABLE 체크
         if server_config.TTS.TTS_ENABLE:
             wav_bytes = text_to_speech(tts_text, emo_out)
         else:
             wav_bytes = None
-            
+
         return llm_out, emo_out, wav_bytes
 
     try:
@@ -679,7 +681,7 @@ async def handle_chat(websocket: WebSocket, data: dict):
 
             host = websocket.url.hostname or "localhost"
             if host == "0.0.0.0": host = "localhost"
-            
+
             audio_filename = fname
             audio_url = f"http://{host}:{FILE_SERVER_PORT}/{fname}"
 
@@ -706,48 +708,8 @@ async def handle_feedback(websocket: WebSocket, data: dict):
         await websocket.send_json({"op": "feedback_result", "result": res})
 
 
-async def handle_rag(websocket: WebSocket, data: dict):
-    """RAG(검색 기반 생성) 요청 처리"""
-    q_text = data.get("text", "")
-    k_word = data.get("keywords", "")
-    if q_text:
-        def process_rag():
-            llm = generate_llm_response(q_text, k_word, InputTypeValue.RAG_SEARCH, "")
-            tts_in = re.sub(r'[^\u0000-\uFFFF]', '', llm)
-            emo = analyze_emotion(llm)
-            
-            # TTS_ENABLE 체크
-            if server_config.TTS.TTS_ENABLE:
-                wav_bytes = text_to_speech(tts_in, emo)
-            else:
-                wav_bytes = None
-                
-            return llm, emo, wav_bytes
-
-        try:
-            l, e, w = await asyncio.to_thread(process_rag)
-            
-            audio_filename = None
-            audio_url = None
-            
-            if w is not None:
-                fname = f"{uuid.uuid4()}.wav"
-                with open(os.path.join(AUDIO_SAVE_PATH, fname), "wb") as f:
-                    f.write(w)
-
-                host = websocket.url.hostname or "localhost"
-                if host == "0.0.0.0": host = "localhost"
-                
-                audio_filename = fname
-                audio_url = f"http://{host}:{FILE_SERVER_PORT}/{fname}"
-                
-            await websocket.send_json({
-                "op": "rag_result", "keywords": q_text, "answer": l,
-                "emotion": e, "audio_filename": audio_filename,
-                "audio_url": audio_url
-            })
-        except Exception as e:
-            await ws_error(websocket, str(e))
+# RAG 핸들러 삭제 (통합됨)
+# async def handle_rag(websocket: WebSocket, data: dict): ...
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -760,7 +722,7 @@ async def websocket_endpoint(websocket: WebSocket):
     WebSocket 연결 엔드포인트
     1. 내부 서비스 준비 상태 확인
     2. 클라이언트 연결 수락
-    3. 메시지 루프 (Observe, Chat, Feedback, RAG 등 처리)
+    3. 메시지 루프 (Observe, Chat, Feedback 등 처리)
     """
     # 연결 수락 전 내부 서비스 상태 확인 (최대 60초 대기)
     is_ready = await wait_for_services(timeout=60)
@@ -811,10 +773,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if op == "feedback":
                 await handle_feedback(websocket, data)
-                continue
-
-            if op == "rag":
-                await handle_rag(websocket, data)
                 continue
 
     finally:

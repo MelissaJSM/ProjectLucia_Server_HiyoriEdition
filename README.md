@@ -30,7 +30,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 *   **고성능 로컬 LLM**: `ExLlamaV3` 백엔드를 사용하여 Gemma 3, Phi-4 등의 최신 모델을 고속으로 추론합니다. (멀티 GPU 및 텐서 병렬화 지원)
 *   **감성적인 TTS**: `GPT-SoVITS`를 활용하여 텍스트의 감정(기쁨, 슬픔, 분노 등)을 분석하고 그에 맞는 톤으로 음성을 생성합니다.
 *   **실시간 화면 인식 (Vision)**: 사용자의 화면을 캡처하여 상황을 분석하고, AI가 먼저 말을 거는 능동적인 상호작용을 지원합니다.
-*   **하이브리드 RAG 검색**: `SearXNG`(Docker) 또는 `DuckDuckGo`를 통해 최신 웹 정보를 검색하여 답변의 정확도를 높입니다.
+*   **하이브리드 RAG 검색**: `Google MCP`(noapi-google-search-mcp) 또는 `DuckDuckGo`를 통해 최신 웹 정보를 검색하여 답변의 정확도를 높입니다.
 *   **모델 관리자**: GUI 내에서 필요한 AI 모델 파일을 손쉽게 다운로드하고 관리할 수 있습니다.
 
 ---
@@ -51,7 +51,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 ### GUI & Tools
 *   **Interface**: PyQt5 (Qt Designer)
 *   **Process Management**: QProcess, psutil
-*   **Search**: SearXNG, DuckDuckGo (ddgs)
+*   **Search**: Google MCP, DuckDuckGo (ddgs)
 
 ---
 
@@ -74,7 +74,7 @@ pip install uv
 
 uv pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
 
-uv pip install notebook ipywidgets hf_xet wordsegment python-multipart PyQt5 pytz flask ddgs nvidia-ml-py trafilatura mysql-connector-python fastapi transformers soundfile "uvicorn[standard]" ffmpeg-python librosa pytorch_lightning matplotlib x_transformers peft jieba fast_langdetect g2p_en split_lang cn2an pypinyin jieba_fast pyopenjtalk jamo ko_pron g2pk2 python-mecab-ko onnxruntime-gpu opencc
+uv pip install notebook ipywidgets hf_xet wordsegment python-multipart PyQt5 pytz flask ddgs nvidia-ml-py trafilatura mysql-connector-python fastapi transformers soundfile "uvicorn[standard]" ffmpeg-python librosa pytorch_lightning matplotlib x_transformers peft jieba fast_langdetect g2p_en split_lang cn2an pypinyin jieba_fast pyopenjtalk jamo ko_pron g2pk2 python-mecab-ko onnxruntime-gpu opencc mcp noapi-google-search-mcp
 
 windows 의 경우
 uv pip install https://github.com/kingbri1/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu128torch2.8.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
@@ -91,9 +91,6 @@ uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0
 
 ### 3. 데이터베이스 설정
 MySQL을 설치 한 후 DB.SQL 파일을 임포트하여 구성합니다.
-
-### 4. SURXNG 설치
-[(SURXNG)](https://docs.searxng.org/admin/installation.html) 에서 다운로드 이후 연결을 하면 surxng 기반 검색을, 미설치시 DuckDuckGo 기반으로 검색을 시도합니다.
 
 ### 0. Docker 환경 설치
 [(Finetuning)](https://github.com/MelissaJSM/ProjectLucia_Finetuning.git) 의 링크에서 Docker 설치환경을 그대로 따라하시면 됩니다. 

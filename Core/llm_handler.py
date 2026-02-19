@@ -36,9 +36,8 @@ db_manager = MySQLManager()
 
 class InputTypeValue(IntEnum):
     """입력 유형을 정의하는 열거형 클래스"""
-    CHAT = 0        # 일반 대화
-    RAG_SEARCH = 2  # RAG 검색
-    FEEDBACK = 3    # 피드백 처리
+    CHAT = 0  # 일반 대화
+    FEEDBACK = 3  # 피드백 처리
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -52,7 +51,7 @@ def _call_llama_server(data: dict, files: list = None) -> dict:
     """
     url = LLAMA_SERVER_URL.rstrip("/") + "/v1/chat/completions"
     timeout = getattr(server_config.LLM, "TIMEOUT", 120)
-    
+
     # files는 [('images', (filename, file_obj, content_type)), ...] 형태여야 함
     resp = requests.post(url, data=data, files=files, timeout=timeout)
     resp.raise_for_status()
@@ -71,14 +70,14 @@ def check_llm_backend_status() -> dict:
         "temperature": 0.0,
         "stream": False,
     }
-    
+
     data = {"request_json": json.dumps(test_req_dict)}
-    
+
     start = time.time()
     try:
         resp_json = _call_llama_server(data)
         latency_ms = int((time.time() - start) * 1000)
-        
+
         if isinstance(resp_json, dict) and "choices" in resp_json:
             return {"status": "ok", "latency_ms": latency_ms}
         return {"status": "error", "detail": "invalid response", "latency_ms": latency_ms}
@@ -94,11 +93,35 @@ def _build_chat_messages(user_input, history_log, emotion, model_type, user_info
     """
     일반 대화(CHAT) 모드의 메시지를 구성합니다.
     시스템 프롬프트에 시간, 감정, 사용자 정보 등을 포함합니다.
+    또한 RAG 검색을 수행하여 검색 결과가 있으면 프롬프트에 추가합니다.
     """
     tz = pytz.timezone("Asia/Seoul")
     now = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
-    # 감정 정보 프롬프트
+    # 1. RAG 검색 수행 (상시 동작)
+    # 검색어가 없으면 user_input 전체를 사용
+    search_result = preprocess_webrag(
+        question=user_input,
+        search_query=user_input,
+        max_results_search=5,
+        use_embedding=True,
+        select_top=True,
+    )
+    rag_context = search_result.get("best_text", "")
+
+    # 검색 결과가 유효한 경우에만 프롬프트에 추가
+    rag_prompt = ""
+    if rag_context and "검색 결과가 없습니다" not in rag_context:
+        rag_prompt = (
+            f"\n\n[참고 정보 (RAG Search Result)]\n"
+            f"{rag_context}\n"
+            f"※ 위 검색 결과를 분석하여 사용자의 질문에 답변하십시오.\n"
+            f"※ 만약 정확한 정보가 없다면, 검색된 내용(제목, 출처 등)을 언급하며 '이런 정보들만 보인다'고 설명하십시오.\n"
+            f"※ 검색 결과를 무시하지 말고 반드시 답변에 포함시키십시오.\n"
+        )
+        print(f"🔍 RAG 정보 추가됨: {len(rag_context)} chars")
+
+    # 2. 감정 정보 프롬프트
     emotion_prompt = ""
     if emotion:
         emotion_prompt = (
@@ -106,68 +129,36 @@ def _build_chat_messages(user_input, history_log, emotion, model_type, user_info
             f"감정 상태를 고려하여 대화하여 주십시오."
         )
 
-    # 사용자 정보 프롬프트
+    # 3. 사용자 정보 프롬프트
     user_info_str = ""
     if user_info:
         parts = []
         if user_info.get("name"): parts.append(f"Name: {user_info['name']}")
         if user_info.get("gender"): parts.append(f"Gender: {user_info['gender']}")
         if user_info.get("birth_date"): parts.append(f"Birthday: {user_info['birth_date']}")
-        
+
         if parts:
             user_info_str = f"[About the user you are talking to] {', '.join(parts)}\n"
 
-    # 시스템 프롬프트 조립
-    system_content = server_config.LLM.LLM_CHAT_FORMAT.format(
+    # 4. 시스템 프롬프트 조립
+    # 순서 변경: 사용자 정보 -> 기본 설정(캐릭터) -> RAG 정보 (가장 최신/중요)
+    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(
         recent_conversation=history_log,
         userEmotion=emotion_prompt,
         now=now,
     )
-    
-    if user_info_str:
-        system_content = user_info_str + system_content
-        print("✅ 사용자 정보가 프롬프트에 추가되었습니다.")
 
-    print(f"📝 최종 시스템 프롬프트:\n{system_content}")
-    
+    # RAG 정보를 캐릭터 설정 뒤에 배치하여 우선순위를 높임
+    final_system_content = f"{user_info_str}{base_system_content}{rag_prompt}"
+
+    print(f"📝 최종 시스템 프롬프트:\n{final_system_content}")
+
     # Gemma 모델 특화 처리
     if "gemma" in model_type:
-        system_content += "\n\n대화시작:"
+        final_system_content += "\n\n대화시작:"
 
     return [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": user_input},
-    ]
-
-
-def _build_rag_messages(user_input, search_keyword, model_type):
-    """
-    RAG 검색(RAG_SEARCH) 모드의 메시지를 구성합니다.
-    검색 키워드로 정보를 조회하고, 이를 바탕으로 답변을 생성하도록 유도합니다.
-    """
-    print(f"🔍 RAG 검색 수행: {search_keyword}")
-    
-    # 웹 검색 및 전처리
-    search_result = preprocess_webrag(
-        question=user_input,
-        search_query=search_keyword,
-        max_results_search=10,
-        use_embedding=True,
-        select_top=True,
-    )
-    best_text = search_result.get("best_text", "")
-
-    # 시스템 프롬프트 조립
-    system_content = server_config.LLM.LLM_RAG_SEARCH_FORMAT.format(
-        user_input=user_input,
-        search_result=best_text,
-    )
-
-    if "gemma" in model_type:
-        system_content += "\n\n대화시작:"
-
-    return [
-        {"role": "system", "content": system_content},
+        {"role": "system", "content": final_system_content},
         {"role": "user", "content": user_input},
     ]
 
@@ -179,7 +170,7 @@ def _build_feedback_messages(feedback_input, log_id, model_type):
     """
     print(f"📝 피드백 데이터 조회 (ID: {log_id})")
     feedback_data = db_manager.feedback_call(log_id)
-    
+
     formatted_input = (
         f"질문: {feedback_data['user']}\n"
         f"모델의 응답 : {feedback_data['assistant']}\n"
@@ -217,7 +208,7 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
     data = {
         "request_json": json.dumps(req_dict)
     }
-    
+
     print(f"🚀 LLM 요청 시작 (Model: {model_type})")
 
     try:
@@ -257,35 +248,33 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
 # 메인 진입점 (Facade)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def generate_llm_response(user_input, recent_conversation, inputType, emotion, image_paths: Optional[List[str]] = None, user_info: dict = None):
+def generate_llm_response(user_input, recent_conversation, inputType, emotion, image_paths: Optional[List[str]] = None,
+                          user_info: dict = None):
     """
     LLM 응답을 생성하는 메인 함수입니다.
     입력 타입(inputType)에 따라 적절한 메시지 빌더를 호출하고 요청을 실행합니다.
-    
+
     Args:
         user_input (str): 사용자 입력 텍스트
         recent_conversation (str): 최근 대화 내역
-        inputType (InputTypeValue): 입력 유형 (CHAT, RAG_SEARCH, FEEDBACK)
+        inputType (InputTypeValue): 입력 유형 (CHAT, FEEDBACK)
         emotion (str): 사용자 감정 상태
         image_paths (List[str], optional): 이미지 파일 경로 리스트
         user_info (dict, optional): 사용자 정보 (이름, 성별, 생년월일)
-        
+
     Returns:
         str: LLM이 생성한 응답 텍스트
     """
     model_type = server_config.LLM.MODEL_TYPE
 
     if inputType == InputTypeValue.CHAT:
+        # 일반 대화 모드에서 RAG 검색이 통합됨
         messages = _build_chat_messages(user_input, recent_conversation, emotion, model_type, user_info)
-    
-    elif inputType == InputTypeValue.RAG_SEARCH:
-        # RAG 모드에서는 recent_conversation 인자를 검색 키워드로 사용
-        messages = _build_rag_messages(user_input, recent_conversation, model_type)
-        
+
     elif inputType == InputTypeValue.FEEDBACK:
         # FEEDBACK 모드에서는 recent_conversation 인자를 로그 ID로 사용
         messages = _build_feedback_messages(user_input, recent_conversation, model_type)
-        
+
     else:
         print(f"❌ 알 수 없는 inputType: {inputType}")
         return None
