@@ -89,7 +89,7 @@ uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0
 [(라이브러리)](https://drive.google.com/file/d/1KUQ5REXQrKPENT60B25J7EOHpDOrtT3L/view?usp=sharing) 를 다운로드하여 프로젝트 최상단 폴더에 Core 폴더째로 압축을 해제합니다.
 - 혹은 Release 에서 모든 파일을 다운받으시면 해당과정을 스킵해도됩니다.
 
-### 3. 데이터베이스 설정
+### 4. 데이터베이스 설정
 MySQL을 설치 한 후 DB.SQL 파일을 임포트하여 구성합니다.
 
 ### 0. Docker 환경 설치
