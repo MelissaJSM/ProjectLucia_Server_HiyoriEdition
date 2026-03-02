@@ -89,7 +89,7 @@ def check_llm_backend_status() -> dict:
 # 메시지 빌더 함수 (모드별 프롬프트 구성)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _build_chat_messages(user_input, history_log, emotion, model_type, user_info=None):
+def _build_chat_messages(user_input, history_log, emotion, model_type, user_info=None, has_image=False):
     """
     일반 대화(CHAT) 모드의 메시지를 구성합니다.
     시스템 프롬프트에 시간, 감정, 사용자 정보 등을 포함합니다.
@@ -100,14 +100,17 @@ def _build_chat_messages(user_input, history_log, emotion, model_type, user_info
 
     # 1. RAG 검색 수행 (상시 동작)
     # 검색어가 없으면 user_input 전체를 사용
-    search_result = preprocess_webrag(
-        question=user_input,
-        search_query=user_input,
-        max_results_search=5,
-        use_embedding=True,
-        select_top=True,
-    )
-    rag_context = search_result.get("best_text", "")
+    # 이미지가 있는 경우 검색을 수행하지 않음 (방어 코드)
+    rag_context = ""
+    if not has_image:
+        search_result = preprocess_webrag(
+            question=user_input,
+            search_query=user_input,
+            max_results_search=5,
+            use_embedding=True,
+            select_top=True,
+        )
+        rag_context = search_result.get("best_text", "")
 
     # 검색 결과가 유효한 경우에만 프롬프트에 추가
     rag_prompt = ""
@@ -269,7 +272,8 @@ def generate_llm_response(user_input, recent_conversation, inputType, emotion, i
 
     if inputType == InputTypeValue.CHAT:
         # 일반 대화 모드에서 RAG 검색이 통합됨
-        messages = _build_chat_messages(user_input, recent_conversation, emotion, model_type, user_info)
+        has_image = bool(image_paths)
+        messages = _build_chat_messages(user_input, recent_conversation, emotion, model_type, user_info, has_image=has_image)
 
     elif inputType == InputTypeValue.FEEDBACK:
         # FEEDBACK 모드에서는 recent_conversation 인자를 로그 ID로 사용
