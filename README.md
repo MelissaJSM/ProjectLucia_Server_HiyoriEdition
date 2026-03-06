@@ -78,11 +78,11 @@ uv pip install notebook ipywidgets hf_xet wordsegment python-multipart PyQt5 pyt
 
 windows 의 경우
 uv pip install https://github.com/kingbri1/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu128torch2.8.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
-uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.18/exllamav3-0.0.18+cu128.torch2.8.0-cp310-cp310-win_amd64.whl
+uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.23/exllamav3-0.0.23+cu128.torch2.8.0-cp310-cp310-win_amd64.whl
 
 linux 의 경우
 uv pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl
-uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.18/exllamav3-0.0.18+cu128.torch2.8.0-cp310-cp310-linux_x86_64.whl
+uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.23/exllamav3-0.0.23+cu128.torch2.8.0-cp310-cp310-linux_x86_64.whl
 ```
 
 ### 3. 추가 라이브러리 설치
