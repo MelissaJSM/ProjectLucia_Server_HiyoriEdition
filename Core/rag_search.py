@@ -1,13 +1,9 @@
-# ──────────────────────────────────────────────────────────────────────────────
-# Core/rag_search.py
-# 단일 검색 모듈 (DDGS - Dux Distributed Global Search)
-# ──────────────────────────────────────────────────────────────────────────────
 import sys
 import time
 import logging
 from typing import List, Dict, Any, Optional
 
-# 최신 DDGS 메타검색 라이브러리 (pip install -U ddgs)
+# 최신 DDGS 메타검색 라이브러리
 from ddgs import DDGS
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -17,77 +13,95 @@ logger = logging.getLogger("llm.rag_search")
 logger.setLevel(logging.INFO)
 
 if not logger.handlers:
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
-    logger.addHandler(console_handler)
+    console_handler = sys.stdout
+    handler = logging.StreamHandler(console_handler)
+    handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
+    logger.addHandler(handler)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 설정 및 상수
+# 의도 분류 키워드 정의
 # ──────────────────────────────────────────────────────────────────────────────
-REGION_DDG = "kr-kr"
-SAFESEARCH = "moderate"
-
-# 검색 트리거 키워드 정의
-KEYWORDS_WEATHER = ["날씨", "기온", "비 오나", "눈 오나", "weather"]
-KEYWORDS_MAP = ["위치", "지도", "어디", "맛집", "가는 길", "거리"]
-KEYWORDS_NEWS = ["뉴스", "속보", "사건", "news"]
-KEYWORDS_FINANCE = ["주식", "주가", "코인", "환율", "삼성전자", "bitcoin", "stock"]
-KEYWORDS_SHOPPING = ["가격", "얼마", "최저가", "싸게 사는"]
-KEYWORDS_GENERAL = ["검색", "찾아", "search", "find", "알려줘", "뭐야", "누구야"]
-
-# 전체 키워드 통합 (검색 여부 판단용)
-ALL_SEARCH_KEYWORDS = KEYWORDS_WEATHER + KEYWORDS_MAP + KEYWORDS_NEWS + KEYWORDS_FINANCE + KEYWORDS_SHOPPING + KEYWORDS_GENERAL
-
+INTENT_KEYWORDS = {
+    "news": ["뉴스", "속보", "사건", "보도", "기사", "news", "최근 소식"],
+    "book": ["책", "도서", "작가", "출판", "소설", "book", "author"],
+    "media": ["사진", "이미지", "영상", "동영상", "유튜브", "image", "video", "youtube"],
+    "info": ["날씨", "주가", "환율", "지도", "위치", "맛집", "가격", "최저가"] # 일반 text()가 유리한 항목
+}
 
 def now_utc_iso() -> str:
-    """현재 UTC 시간을 ISO 8601 형식으로 반환합니다."""
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-
-def is_search_needed(query: str) -> bool:
-    """쿼리에 검색 키워드가 포함되어 있는지 확인합니다."""
+def detect_search_intent(query: str) -> str:
+    """질문의 의도를 분석하여 적절한 DDGS 메서드 타입을 반환합니다."""
     q_lower = query.lower()
-    return any(k in q_lower for k in ALL_SEARCH_KEYWORDS)
-
+    for intent, keywords in INTENT_KEYWORDS.items():
+        if any(k in q_lower for k in keywords):
+            return intent
+    return "general"
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 단일 검색 엔진: DDGS
+# 본문 추출 (Deep RAG) 기능
 # ──────────────────────────────────────────────────────────────────────────────
-def fetch_ddgs(query: str, max_results: int) -> List[Dict[str, Any]]:
-    """새로운 DDGS 라이브러리를 통해 웹 검색을 수행합니다."""
-    docs = []
-    logger.info(f"🚀 [DDGS Search] 검색 시작: {query}")
-
+def fetch_full_content(url: str) -> str:
+    """검색 결과의 URL에서 실제 본문 내용을 마크다운으로 추출합니다."""
     try:
-        # 공식 문서에 따른 새로운 초기화 및 호출 방식 적용
-        results = DDGS().text(
-            query=query,  # 구버전의 'keywords' 파라미터가 'query'로 변경됨
-            region=REGION_DDG,
-            safesearch=SAFESEARCH,
-            backend="auto",  # 최신 문서 권장 설정 (다양한 검색 엔진 자동 라우팅)
-            max_results=max_results
-        )
+        logger.info(f"📄 [Extract] 본문 추출 중: {url}")
+        result = DDGS().extract(url, fmt="text_markdown")
+        return result.get("content", "")
+    except Exception as e:
+        logger.warning(f"⚠️ [Extract] 추출 실패 ({url}): {e}")
+        return ""
 
-        # Generator가 반환될 수 있으므로 list 변환 및 순회 방어
+# ──────────────────────────────────────────────────────────────────────────────
+# 분기형 검색 엔진: DDGS Multi-Route
+# ──────────────────────────────────────────────────────────────────────────────
+def fetch_ddgs_smart(query: str, max_results: int) -> List[Dict[str, Any]]:
+    """의도에 따라 news, books, text 등 최적의 메서드를 호출합니다."""
+    docs = []
+    intent = detect_search_intent(query)
+    ddgs = DDGS()
+    
+    logger.info(f"🚀 [DDGS] 의도 감지: {intent} | 검색어: {query}")
+    
+    try:
+        if intent == "news":
+            results = ddgs.news(query, region="kr-kr", safesearch="moderate", max_results=max_results)
+        elif intent == "book":
+            results = ddgs.books(query, max_results=max_results)
+        else:
+            # 날씨, 주가, 일반 지식 등은 text()가 가장 정확함
+            results = ddgs.text(query, region="kr-kr", safesearch="moderate", max_results=max_results)
+
         if not results:
-            return docs
+            return []
 
         for i, r in enumerate(results, 1):
-            body = r.get("body", "")
-            if not body:
-                continue
-            docs.append({
+            # 필드명이 메서드마다 조금씩 다름 (href vs url, body vs description)
+            url = r.get("href") or r.get("url")
+            title = r.get("title", "제목 없음")
+            snippet = r.get("body") or r.get("description") or r.get("info", "")
+            
+            doc = {
                 "index": i,
-                "title": r.get("title", ""),
-                "snippet": body,
-                "url": r.get("href", ""),
-                "source": "Web Search (DDGS)"
-            })
+                "title": title,
+                "snippet": snippet,
+                "url": url,
+                "source": f"DDGS {intent.capitalize()}",
+                "full_content": ""
+            }
+            
+            # [Deep RAG] 최상위 결과 1~2개는 본문을 직접 긁어옴 (LLM 답변 질 향상)
+            if i <= 2 and url:
+                full_text = fetch_full_content(url)
+                if full_text:
+                    doc["full_content"] = full_text[:2000] # 너무 길면 2000자에서 자름
+            
+            docs.append(doc)
+            
     except Exception as e:
-        logger.error(f"❌ [DDGS Search] 검색 실패: {e}")
-
+        logger.error(f"❌ [DDGS] 검색 실패: {e}")
+        
     return docs
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 메인 오케스트레이터
@@ -96,60 +110,32 @@ def preprocess_webrag(
         question: str,
         search_query: Optional[str] = None,
         *,
-        max_results_search: int = 5,  # 결과를 핵심만 빠르게 가져오도록 기본값 축소
-        use_embedding: bool = False,
-        select_top: bool = False
+        max_results_search: int = 3,
+        use_embedding: bool = False,  # 👈 기존 시스템에서 넘겨주는 파라미터 복구
+        select_top: bool = False,     # 👈 기존 시스템에서 넘겨주는 파라미터 복구
+        **kwargs                      # 👈 혹시 모를 추가 파라미터 방어용
 ) -> Dict[str, Any]:
     q_for_search = (search_query or question).strip()
-
-    # [검색 의도 파악] 키워드가 없으면 검색을 수행하지 않음
-    if not is_search_needed(q_for_search):
-        return {
-            "query": question,
-            "search_query": q_for_search,
-            "generated_at": now_utc_iso(),
-            "docs": [],
-            "best_text": "검색 결과가 없습니다. (검색어 미감지)",
-            "debug_info": {"engine_used": "None", "doc_count": 0}
-        }
-
-    logger.info(f"🔹 [Web-RAG] Searching for: {q_for_search}")
-
-    # DDGS 검색 실행
-    docs = fetch_ddgs(q_for_search, max_results_search)
-    used_engine = "DDGS" if docs else "None"
-
-    # 결과 텍스트 조립
+    
+    # 검색 실행
+    docs = fetch_ddgs_smart(q_for_search, max_results_search)
+    
+    # LLM에 전달할 컨텍스트 조립
     formatted_texts = []
-    if docs:
-        for d in docs:
-            formatted_texts.append(
-                f"[문서 {d['index']} | {d['source']}]\n"
-                f"제목: {d['title']}\n"
-                f"출처: {d['url']}\n"
-                f"내용: {d['snippet']}"
-            )
-        final_context = "\n\n".join(formatted_texts)
-    else:
-        final_context = "검색 결과가 없습니다."
-
-    # 로그 출력
-    logger.info("=" * 40)
-    logger.info(f"🔎 [RAG Status] Engine: {used_engine} | Docs: {len(docs)}")
-    if docs:
-        logger.info(f"📄 [Preview] Top 1: {docs[0]['title']}")
-    else:
-        logger.warning("❌ [Result] No documents found.")
-    logger.info("=" * 40)
+    for d in docs:
+        content = d['full_content'] if d['full_content'] else d['snippet']
+        formatted_texts.append(
+            f"### [문서 {d['index']}] {d['title']}\n"
+            f"- 출처: {d['url']}\n"
+            f"- 내용: {content}\n"
+        )
+    
+    final_context = "\n".join(formatted_texts) if docs else "검색 결과를 찾지 못했습니다."
 
     return {
         "query": question,
         "search_query": q_for_search,
-        "generated_at": now_utc_iso(),
         "docs": docs,
         "best_text": final_context,
-        "debug_info": {
-            "engine_used": used_engine,
-            "doc_count": len(docs)
-        }
+        "generated_at": now_utc_iso()
     }
