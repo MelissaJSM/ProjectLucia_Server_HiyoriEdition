@@ -18,6 +18,7 @@ import threading
 import http.server
 import socketserver
 import ast
+import urllib.request  # 워밍업 직접 호출을 위해 추가
 from typing import Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -71,8 +72,10 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 FILE_SERVER_PORT = server_config.PORTS.AUDIO_SERVER_PORT
 
 # [STATE STORE] 클라이언트별 화면 관찰 상태 저장소
-# 구조: {"summary": str, "stored_images": [], "cooldown": int, "last_spoken": str}
 client_states: Dict[str, Dict[str, Any]] = {}
+
+# [서버 상태 플래그] 워밍업 완료 여부를 추적하여 UI 동기화에 사용
+SERVER_IS_READY = False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -80,10 +83,7 @@ client_states: Dict[str, Dict[str, Any]] = {}
 # ──────────────────────────────────────────────────────────────────────────────
 
 def get_all_vram_info() -> List[Dict[str, Any]]:
-    """
-    모든 GPU의 VRAM 사용량 정보를 조회합니다.
-    pynvml 라이브러리가 필요합니다.
-    """
+    """모든 GPU의 VRAM 사용량 정보를 조회합니다."""
     infos = []
     if not _HAS_NVML: return infos
     try:
@@ -125,10 +125,7 @@ def _cleanup_temp_images(paths: List[str]):
 
 
 class AudioFileHandler(http.server.SimpleHTTPRequestHandler):
-    """
-    생성된 오디오 파일을 제공하기 위한 간단한 HTTP 핸들러입니다.
-    /audio/ 경로를 루트 경로로 매핑합니다.
-    """
+    """생성된 오디오 파일을 제공하기 위한 HTTP 핸들러"""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=AUDIO_SAVE_PATH, **kwargs)
@@ -167,7 +164,6 @@ class ConnectionManager:
         self.last_seen: Dict[str, float] = {}
 
     async def connect(self, websocket: WebSocket, client_id: str):
-        """클라이언트 연결 수락 및 등록"""
         await websocket.accept()
         self.active[client_id] = websocket
         self.last_seen[client_id] = time.time()
@@ -175,13 +171,11 @@ class ConnectionManager:
         await websocket.send_json({"op": "hello", "client_id": client_id})
 
     def disconnect(self, client_id: str):
-        """클라이언트 연결 해제 및 리소스 정리"""
         if client_id in self.active:
             del self.active[client_id]
             del self.last_seen[client_id]
             print(f"[WS] disconnected: {client_id}")
 
-            # 연결 종료 시 해당 클라이언트의 상태 및 임시 파일 정리
             if client_id in client_states:
                 state = client_states.pop(client_id)
                 stored_images = state.get("stored_images", [])
@@ -190,11 +184,9 @@ class ConnectionManager:
                     _cleanup_temp_images(stored_images)
 
     def mark_seen(self, client_id: str):
-        """클라이언트의 마지막 활동 시간 갱신"""
         if client_id in self.active: self.last_seen[client_id] = time.time()
 
     async def heartbeat_tick(self):
-        """주기적으로 클라이언트 생존 여부 확인 (Heartbeat)"""
         now = time.time()
         for cid in list(self.active.keys()):
             if (now - self.last_seen.get(cid, 0)) > HEARTBEAT_TIMEOUT:
@@ -214,46 +206,9 @@ manager = ConnectionManager()
 
 
 async def _heartbeat_loop():
-    """백그라운드에서 하트비트 체크 루프 실행"""
     while True:
         await manager.heartbeat_tick()
         await asyncio.sleep(HEARTBEAT_INTERVAL)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Init & Lifespan (서버 시작/종료 시 처리)
-# ──────────────────────────────────────────────────────────────────────────────
-
-def init_server_settings():
-    """DB에서 서버 설정을 로드하여 전역 설정에 반영합니다."""
-    try:
-        db = MySQLManager()
-        settings = db.fetch_server_settings()
-        server_config.LLM.COMMU_LOG_TIME = bool(settings.get("commu_log_time", 0))
-        server_config.LLM.COMMU_LOG_INTERVAL = int(settings.get("commu_log_interval", 10))
-        db.close()
-    except Exception as e:
-        print(f"⚠️ Settings load failed: {e}")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """FastAPI 앱의 수명 주기 관리 (시작 시 초기화, 종료 시 정리)"""
-    init_server_settings()
-
-    # 파일 서버 스레드 시작
-    global _file_server_thread
-    _file_server_thread = threading.Thread(target=start_file_server, daemon=True)
-    _file_server_thread.start()
-
-    # 하트비트 태스크 시작
-    hb_task = asyncio.create_task(_heartbeat_loop())
-    print("✅ Server Started")
-
-    try:
-        yield
-    finally:
-        hb_task.cancel()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -275,28 +230,105 @@ async def check_port_open(host: str, port: int) -> bool:
 async def wait_for_services(timeout: int = 60) -> bool:
     """LLM, TTS, Audio 서버가 모두 준비될 때까지 대기합니다."""
     start_time = time.time()
-    print("⏳ Waiting for internal services (LLM, TTS, Audio) to be ready...")
-
     while time.time() - start_time < timeout:
-        # 1. LLM Check
         llm_ok = await check_port_open(server_config.PORTS.LLAMA_HOST, server_config.PORTS.LLAMA_PORT)
 
-        # 2. TTS Check (TTS_ENABLE이 True일 때만 확인)
         tts_ok = True
         if server_config.TTS.TTS_ENABLE:
             tts_ok = await check_port_open(server_config.PORTS.TTS_HOST, server_config.PORTS.TTS_PORT)
 
-        # 3. Audio Check (Localhost)
         audio_ok = await check_port_open("127.0.0.1", FILE_SERVER_PORT)
 
         if llm_ok and tts_ok and audio_ok:
-            print("✅ All internal services are READY!")
             return True
 
         await asyncio.sleep(1.0)
-
-    print("❌ Service check TIMEOUT.")
     return False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Init & Lifespan (서버 시작/종료 시 처리 및 스텔스 워밍업)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def init_server_settings():
+    try:
+        db = MySQLManager()
+        settings = db.fetch_server_settings()
+        server_config.LLM.COMMU_LOG_TIME = bool(settings.get("commu_log_time", 0))
+        server_config.LLM.COMMU_LOG_INTERVAL = int(settings.get("commu_log_interval", 10))
+        db.close()
+    except Exception as e:
+        print(f"⚠️ Settings load failed: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI 앱의 수명 주기 관리 및 비동기 워밍업"""
+    global SERVER_IS_READY
+    init_server_settings()
+
+    # 파일 서버 스레드 시작
+    global _file_server_thread
+    _file_server_thread = threading.Thread(target=start_file_server, daemon=True)
+    _file_server_thread.start()
+
+    # 🚀 백그라운드 스텔스 워밍업
+    async def do_warmup():
+        global SERVER_IS_READY
+        print("⏳ Waiting for internal services to be ready for warmup...")
+
+        # LLM/TTS 포트가 열릴 때까지 최대 120초 대기
+        is_ready = await wait_for_services(timeout=120)
+
+        if is_ready:
+            print("🔥 Services are online! Executing stealth warmup...")
+            try:
+                def _run():
+                    # 1. LLM 직접 API 호출 (로그 오염 방지, 1토큰 생성으로 시간 단축)
+                    try:
+                        req_data = json.dumps({
+                            "messages": [{"role": "user", "content": "Wake up"}],
+                            "max_tokens": 1
+                        }).encode('utf-8')
+
+                        req = urllib.request.Request(
+                            f"http://{server_config.PORTS.LLAMA_HOST}:{server_config.PORTS.LLAMA_PORT}/v1/chat/completions",
+                            data=req_data,
+                            headers={'Content-Type': 'application/json'}
+                        )
+                        with urllib.request.urlopen(req, timeout=30) as response:
+                            pass
+                    except Exception as e:
+                        print(f"⚠️ LLM Warmup warning (Ignored): {e}")
+
+                    # 2. TTS 호출 (사전 다운로드 및 텐서 초기화)
+                    if server_config.TTS.TTS_ENABLE:
+                        try:
+                            _ = text_to_speech("아", "Neutral")
+                        except Exception as e:
+                            print(f"⚠️ TTS Warmup warning (Ignored): {e}")
+
+                await asyncio.to_thread(_run)
+                print("✅ Models are warmed up silently and ready!")
+            except Exception as e:
+                print(f"⚠️ Warmup failed: {e}")
+        else:
+            print("⚠️ Could not warmup. Internal services timeout.")
+
+        # 워밍업 성공 여부와 관계없이 프로세스가 끝났으므로 서비스 레디 상태로 전환
+        SERVER_IS_READY = True
+
+    # 워밍업을 백그라운드 태스크로 등록하여 FastAPI 시작을 블로킹하지 않음
+    asyncio.create_task(do_warmup())
+
+    # 하트비트 태스크 시작
+    hb_task = asyncio.create_task(_heartbeat_loop())
+    print("✅ Server Started")
+
+    try:
+        yield
+    finally:
+        hb_task.cancel()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -311,25 +343,27 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 @app.get("/health")
 async def health():
     """서버 헬스 체크 엔드포인트"""
+    if not SERVER_IS_READY:
+        return JSONResponse(status_code=503, content={"status": "warming_up"})
     return PlainTextResponse("ok")
 
 
 @app.get("/hb/state")
 async def hb_state():
     """현재 서버 상태(활성 연결 수, GPU 정보 등) 반환"""
+    if not SERVER_IS_READY:
+        return JSONResponse(status_code=503, content={"ok": False})
     return JSONResponse({"ok": True, "active_count": len(manager.active), "gpus": get_all_vram_info()})
 
 
 @app.post("/restart")
 async def restart(request: Request, bg: BackgroundTasks):
-    """서버 재시작 요청 처리"""
     bg.add_task(restart_auto)
     return JSONResponse({"ok": True})
 
 
 @app.post("/upload/image")
 async def upload_image(file: UploadFile = File(...)):
-    """이미지 업로드 처리 (임시 저장)"""
     try:
         ext = os.path.splitext(file.filename)[1] or ".jpg"
         image_id = f"{uuid.uuid4()}{ext}"
@@ -347,12 +381,6 @@ async def upload_image(file: UploadFile = File(...)):
 # ──────────────────────────────────────────────────────────────────────────────
 
 async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
-    """
-    화면 관찰(Observe) 요청 처리
-    1. 이미지 분석 (Vision LLM)
-    2. 변화 감지 및 점수 산정
-    3. 필요 시 발화 생성 (Actor LLM) 및 TTS 변환
-    """
     current_image_id = data.get("image_id")
     if not current_image_id: return
 
@@ -369,12 +397,7 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
     image_paths_for_llm = stored_images + [current_image_path]
     count = len(image_paths_for_llm)
 
-    # 발화 문턱값 설정 (6점 이상이면 발화 고려)
     SPEECH_THRESHOLD = 6
-
-    # ----------------------------------------------------------------------
-    # [Phase 1] Analyzer (Vision Mode)
-    # ----------------------------------------------------------------------
 
     if count >= 3:
         img_context_str = "Input: [Img1(Past)] -> [Img2(Past)] -> [Img3(CURRENT)]."
@@ -383,7 +406,6 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         img_context_str = "Input: [Img1(CURRENT)]."
         task_str = "Task: Analyze the current screen."
 
-    # 프롬프트 구성: 화면 변화 감지 및 점수 산정
     analyze_prompt = (
         "!!! SYSTEM COMMAND: ACT AS A SENSITIVE EVENT DETECTOR !!!\n"
         f"{img_context_str}\n"
@@ -422,14 +444,12 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         )
 
     try:
-        # [Timeout Protection] 8초 내에 분석 완료해야 함
         try:
             raw_res_1 = await asyncio.wait_for(asyncio.to_thread(step1_analyze), timeout=8.0)
         except asyncio.TimeoutError:
             print(f"⚠️ Observe Timeout (Infinite Gen blocked). Score set to 0.")
             raw_res_1 = '{"score": 0, "summary": "Timeout", "reason": "System Timeout"}'
 
-        # [Robust Parsing] JSON 파싱 시도
         res_json = {}
         json_str = ""
         start_idx = raw_res_1.find('{')
@@ -448,7 +468,6 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                 except:
                     pass
 
-        # 파싱 실패 시 정규식으로 추출 시도
         if not res_json or "score" not in res_json:
             score_match = re.search(r'["\']score["\']\s*:\s*(\d+)', raw_res_1)
             if score_match:
@@ -468,16 +487,12 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         summary = res_json.get("summary", "")
         reason = res_json.get("reason", "")
 
-        # ------------------------------------------------------------------
-        # [상태 업데이트] 이미지 큐 관리
-        # ------------------------------------------------------------------
         next_stored_images = stored_images + [current_image_path]
         images_to_delete = []
         while len(next_stored_images) > 2:
             oldest = next_stored_images.pop(0)
             images_to_delete.append(oldest)
 
-        # [Warm-up Check] 초기 3프레임은 분석만 하고 반응하지 않음
         if count < 3:
             print(f"👀 Observe[{client_id}]: Warm-up ({count}/3). Ignored.")
             client_states[client_id] = {
@@ -491,9 +506,6 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                 {"op": "observe_result", "should_speak": False, "message": None, "reason": "Warm-up"})
             return
 
-        # ------------------------------------------------------------------
-        # [Phase 2] Decision & Actor (반응 결정 및 발화 생성)
-        # ------------------------------------------------------------------
         should_speak = False
         message_to_send = None
         final_reason = reason
@@ -503,14 +515,12 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         audio_url = None
 
         if score >= SPEECH_THRESHOLD:
-            # 쿨타임 중이어도 점수가 8점 이상(대형 이벤트)이면 무조건 말함
             if cooldown > 0 and score < 8:
                 should_speak = False
                 final_reason = f"[Skipped by Cooldown: {cooldown}] {reason}"
                 cooldown -= 1
             else:
                 should_speak = True
-                # 6~7점은 쿨타임 3턴, 8점 이상은 쿨타임 2턴
                 cooldown = 3 if score < 8 else 2
         else:
             if cooldown > 0: cooldown -= 1
@@ -539,7 +549,6 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
             )
 
             def step2_act():
-                # Phase 2는 현재 이미지만 전송 (속도 최적화)
                 return generate_llm_response(
                     user_input=actor_prompt,
                     recent_conversation=[],
@@ -552,13 +561,11 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                 raw_res_2 = await asyncio.wait_for(asyncio.to_thread(step2_act), timeout=10.0)
                 message_to_send = raw_res_2.replace('"', '').replace("Lucia:", "").strip()
 
-                # [TTS & Emotion Pipeline]
                 if message_to_send:
                     def process_tts(text):
                         tts_text = re.sub(r'[^\u0000-\uFFFF]', '', text)
                         emo = analyze_emotion(text)
 
-                        # TTS_ENABLE 체크
                         if server_config.TTS.TTS_ENABLE:
                             wav_bytes = text_to_speech(tts_text, emo)
                         else:
@@ -571,7 +578,6 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
 
                     if wav_bytes is not None:
                         fname = f"{uuid.uuid4()}.wav"
-                        # 직접 파일 쓰기 (soundfile 의존성 제거)
                         with open(os.path.join(AUDIO_SAVE_PATH, fname), "wb") as f:
                             f.write(wav_bytes)
 
@@ -589,7 +595,6 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                 print(f"⚠️ Actor/TTS Error: {e}")
                 if not message_to_send: should_speak = False
 
-        # 상태 저장
         client_states[client_id] = {
             "summary": summary if summary else last_summary,
             "stored_images": next_stored_images,
@@ -618,18 +623,11 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
 
 
 async def handle_chat(websocket: WebSocket, data: dict):
-    """
-    일반 채팅(Chat) 요청 처리
-    1. 사용자 입력 및 이미지 처리
-    2. LLM 응답 생성 (RAG 통합됨)
-    3. 감정 분석 및 TTS 변환
-    """
     text = data.get("text", "")
     is_emotion = bool(data.get("emotion"))
     img_ids = data.get("image_ids") or []
     if data.get("image_id"): img_ids.append(data.get("image_id"))
 
-    # 사용자 정보 추출
     user_info = {
         "name": data.get("user_name"),
         "gender": data.get("user_gender"),
@@ -648,7 +646,6 @@ async def handle_chat(websocket: WebSocket, data: dict):
     await websocket.send_json({"op": "status", "stage": "processing"})
 
     def process_chat():
-        # RAG 검색이 generate_llm_response 내부에서 자동으로 수행됨
         llm_out = generate_llm_response(
             user_input=text,
             recent_conversation=recent_logs,
@@ -660,7 +657,6 @@ async def handle_chat(websocket: WebSocket, data: dict):
         tts_text = re.sub(r'[^\u0000-\uFFFF]', '', llm_out)
         emo_out = analyze_emotion(llm_out)
 
-        # TTS_ENABLE 체크
         if server_config.TTS.TTS_ENABLE:
             wav_bytes = text_to_speech(tts_text, emo_out)
         else:
@@ -685,13 +681,21 @@ async def handle_chat(websocket: WebSocket, data: dict):
             audio_filename = fname
             audio_url = f"http://{host}:{FILE_SERVER_PORT}/{fname}"
 
-        await websocket.send_json({
-            "op": "chat_result",
-            "llm_response": llm_res,
-            "emotion": emo_res,
-            "audio_filename": audio_filename,
-            "audio_url": audio_url
-        })
+        # 🚀 클라이언트가 이미 끊겼을 경우 발생하는 에러를 캡처
+        try:
+            await websocket.send_json({
+                "op": "chat_result",
+                "llm_response": llm_res,
+                "emotion": emo_res,
+                "audio_filename": audio_filename,
+                "audio_url": audio_url
+            })
+        except RuntimeError as e:
+            if "once a close message has been sent" in str(e):
+                print(f"⚠️ Client disconnected before receiving the chat result.")
+            else:
+                raise e
+
     except Exception as e:
         print(f"⚠️ Chat Failed: {e}")
         await ws_error(websocket, str(e))
@@ -700,16 +704,11 @@ async def handle_chat(websocket: WebSocket, data: dict):
 
 
 async def handle_feedback(websocket: WebSocket, data: dict):
-    """피드백 요청 처리"""
     fb_text = data.get("feedback", "")
     num = data.get("number")
     if fb_text and num is not None:
         res = await asyncio.to_thread(generate_llm_response, fb_text, num, InputTypeValue.FEEDBACK, "")
         await websocket.send_json({"op": "feedback_result", "result": res})
-
-
-# RAG 핸들러 삭제 (통합됨)
-# async def handle_rag(websocket: WebSocket, data: dict): ...
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -718,18 +717,12 @@ async def handle_feedback(websocket: WebSocket, data: dict):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket 연결 엔드포인트
-    1. 내부 서비스 준비 상태 확인
-    2. 클라이언트 연결 수락
-    3. 메시지 루프 (Observe, Chat, Feedback 등 처리)
-    """
+    print("⏳ Waiting for internal services to be ready before accepting WS...")
     # 연결 수락 전 내부 서비스 상태 확인 (최대 60초 대기)
     is_ready = await wait_for_services(timeout=60)
 
     if not is_ready:
         print("⚠️ Connection rejected: Internal services not ready.")
-        # 1013: Try Again Later
         await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
         return
 
