@@ -7,6 +7,7 @@ import time
 import json
 import threading
 import requests
+import re  # 정규식 처리를 위해 추가됨
 from datetime import datetime
 from typing import List, Optional
 from contextlib import ExitStack
@@ -25,7 +26,7 @@ import Core.server_config as server_config
 
 # LLM 서버 URL 및 모델명 (환경변수 또는 기본값)
 LLAMA_SERVER_URL = os.environ.get("LLAMA_SERVER_URL", "http://127.0.0.1:8000")
-LLAMA_SERVER_MODEL = os.environ.get("LLAMA_SERVER_MODEL", "lucia_gemma-3_27b_8_0")
+LLAMA_SERVER_MODEL = os.environ.get("LLAMA_SERVER_MODEL", "lucia_gemma-4_31b_8_0")
 
 # 요청 동시성 제어용 락 (Lock)
 model_lock = threading.Lock()
@@ -151,8 +152,15 @@ def _build_chat_messages(user_input, history_log, emotion, model_type, user_info
         now=now,
     )
 
-    # RAG 정보를 캐릭터 설정 뒤에 배치하여 우선순위를 높임
     final_system_content = f"{user_info_str}{base_system_content}{rag_prompt}"
+
+    # 🚨 [추가] 롤플레잉 및 지문 묘사 방지 강력한 프롬프트 주입
+    final_system_content += (
+        "\n\n[시스템 중요 지시사항]\n"
+        "당신은 사용자에게 정보를 제공하고 돕는 텍스트 기반 AI 어시스턴트입니다.\n"
+        "절대로 소설이나 대본처럼 괄호 '( )'나 특수기호를 사용하여 당신의 행동, 감정, 표정, 동작 등을 지문으로 묘사하지 마십시오.\n"
+        "오직 대화체의 답변 텍스트만 깔끔하게 출력하십시오."
+    )
 
     print(f"📝 최종 시스템 프롬프트:\n{final_system_content}")
 
@@ -182,6 +190,12 @@ def _build_feedback_messages(feedback_input, log_id, model_type):
 
     system_content = server_config.LLM.LLM_FEEDBACK_FORMAT
 
+    # 피드백 모드에서도 롤플레잉 방지 프롬프트 주입
+    system_content += (
+        "\n\n[시스템 중요 지시사항]\n"
+        "절대로 괄호 '( )'를 사용하여 행동이나 감정을 묘사하지 마십시오. 오직 피드백에 대한 명확한 텍스트 답변만 제공하십시오."
+    )
+
     if "gemma" in model_type:
         system_content += "\n\n대화시작:"
 
@@ -204,7 +218,9 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
         "model": LLAMA_SERVER_MODEL,
         "messages": messages,
         "stream": False,
-        "max_response_tokens": 1000
+        "max_response_tokens": 1000,
+        # 🚨 [추가] Stop Token 설정: 원치 않는 태그나 발화 연장선에서 잘라내기
+        "stop": ["<end_of_turn>", "<eos>", "<|endoftext|>", "user:", "대화시작:"]
     }
 
     # 2. Multipart 데이터 준비 (JSON은 문자열로 변환)
@@ -237,6 +253,16 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
 
         # 5. 응답 파싱
         result = response["choices"][0]["message"]["content"].strip()
+
+        # 🚨 [추가] 정규식을 활용한 특수 태그 및 속마음(Thought) 블록 강제 제거
+        # <|channel>thought ... <channel|> 형태 등 예측 가능한 찌꺼기 태그 제거
+        result = re.sub(r'<\|channel\|>.*?<\|channel\|>', '', result, flags=re.DOTALL)
+        result = re.sub(r'<\|channel>.*?<channel\|>', '', result, flags=re.DOTALL)
+        result = re.sub(r'<\|channel\|>.*', '', result, flags=re.DOTALL)  # 닫히지 않은 태그 처리
+        result = result.replace("<end_of_turn>", "")  # 포함되어 나왔을 경우 2차 방어
+
+        result = result.strip()
+
         print(f"🔹 LLM 응답: {result}")
         return result
 
@@ -273,7 +299,8 @@ def generate_llm_response(user_input, recent_conversation, inputType, emotion, i
     if inputType == InputTypeValue.CHAT:
         # 일반 대화 모드에서 RAG 검색이 통합됨
         has_image = bool(image_paths)
-        messages = _build_chat_messages(user_input, recent_conversation, emotion, model_type, user_info, has_image=has_image)
+        messages = _build_chat_messages(user_input, recent_conversation, emotion, model_type, user_info,
+                                        has_image=has_image)
 
     elif inputType == InputTypeValue.FEEDBACK:
         # FEEDBACK 모드에서는 recent_conversation 인자를 로그 ID로 사용
