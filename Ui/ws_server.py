@@ -35,7 +35,7 @@ from fastapi import BackgroundTasks, HTTPException, Request
 # --- Core 모듈
 import Core.server_config as server_config
 from Core.sql import MySQLManager
-from Core.llm_handler import generate_llm_response, InputTypeValue
+from Core.llm_handler import generate_llm_response, InputTypeValue, init_tokenizer
 from Core.emotion_analyzer import analyze_emotion
 from Core.tts_client import text_to_speech
 from Core.runtime_control import restart_auto
@@ -168,7 +168,10 @@ class ConnectionManager:
         self.active[client_id] = websocket
         self.last_seen[client_id] = time.time()
         print(f"[WS] connected: {client_id}")
-        await websocket.send_json({"op": "hello", "client_id": client_id})
+        try:
+            await websocket.send_json({"op": "hello", "client_id": client_id})
+        except Exception:
+            print(f"⚠️ [WS] 클라이언트가 인사 메시지를 받기 전 연결을 끊었습니다: {client_id}")
 
     def disconnect(self, client_id: str):
         if client_id in self.active:
@@ -284,11 +287,20 @@ async def lifespan(app: FastAPI):
             print("🔥 Services are online! Executing stealth warmup...")
             try:
                 def _run():
-                    # 1. LLM 직접 API 호출 (로그 오염 방지, 1토큰 생성으로 시간 단축)
+                    init_tokenizer()
+                    # 1. [추가됨] 감정 분석기 워밍업 (HuggingFace 로컬 모델 200MB 지연 로딩 해소!)
+                    try:
+                        _ = analyze_emotion("테스트")
+                        print("✅ Emotion Analyzer warmed up.")
+                    except Exception as e:
+                        print(f"⚠️ Emotion Analyzer Warmup warning: {e}")
+
+                    # 2. [수정됨] LLM 직접 API 호출 (422 에러 해결을 위해 "model" 파라미터 추가)
                     try:
                         req_data = json.dumps({
-                            "messages": [{"role": "user", "content": "Wake up"}],
-                            "max_tokens": 1
+                            # model 파라미터를 아예 빼보거나,
+                            "messages": [{"role": "user", "content": "hello"}],
+                            "max_tokens": 5
                         }).encode('utf-8')
 
                         req = urllib.request.Request(
@@ -298,13 +310,15 @@ async def lifespan(app: FastAPI):
                         )
                         with urllib.request.urlopen(req, timeout=30) as response:
                             pass
+                        print("✅ LLM Server warmed up.")
                     except Exception as e:
                         print(f"⚠️ LLM Warmup warning (Ignored): {e}")
 
-                    # 2. TTS 호출 (사전 다운로드 및 텐서 초기화)
+                    # 3. TTS 호출 (사전 다운로드 및 텐서 초기화)
                     if server_config.TTS.TTS_ENABLE:
                         try:
                             _ = text_to_speech("아", "Neutral")
+                            print("✅ TTS Server warmed up.")
                         except Exception as e:
                             print(f"⚠️ TTS Warmup warning (Ignored): {e}")
 

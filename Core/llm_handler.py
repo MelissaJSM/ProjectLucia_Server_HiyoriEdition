@@ -18,6 +18,7 @@ import pytz
 # 프로젝트 내부 모듈
 from Core.rag_search import preprocess_webrag
 from Core.sql import MySQLManager
+from transformers import AutoTokenizer
 import Core.server_config as server_config
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -39,6 +40,26 @@ class InputTypeValue(IntEnum):
     """입력 유형을 정의하는 열거형 클래스"""
     CHAT = 0  # 일반 대화
     FEEDBACK = 3  # 피드백 처리
+
+
+# 전역 토크나이저 변수
+GLOBAL_TOKENIZER = None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# LLM 토크나이저 함수
+# ──────────────────────────────────────────────────────────────────────────────
+
+def init_tokenizer():
+    """서버 부팅(워밍업) 시 딱 한 번 호출되어 토크나이저를 메모리에 올립니다."""
+    global GLOBAL_TOKENIZER
+    if GLOBAL_TOKENIZER is None:
+        try:
+            model_path = os.path.join(server_config.LLM.LOCATION, server_config.LLM.LOCATION_MODEL)
+            GLOBAL_TOKENIZER = AutoTokenizer.from_pretrained(model_path)
+            print(f"✅ Tokenizer 로드 완료: {model_path}")
+        except Exception as e:
+            print(f"⚠️ Tokenizer 로드 실패: {e}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -210,19 +231,34 @@ def _build_feedback_messages(feedback_input, log_id, model_type):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] = None):
-    """
-    구성된 메시지와 이미지를 사용하여 LLM 서버에 요청을 보내고 응답을 반환합니다.
-    """
-    # 1. 요청 데이터 구성
+    # 캐시 사이즈 256 배수 보정
+    try:
+        base_context = int(server_config.LLM.CONTEXT)
+    except (ValueError, TypeError):
+        base_context = 4096
+    aligned_context = ((base_context + 255) // 256) * 256
+
+    # 🚨 토크나이저를 이용한 동적 토큰 계산
+    if GLOBAL_TOKENIZER:
+        # messages 배열을 대략적인 문자열로 변환하여 길이 측정
+        prompt_text = " ".join([m["content"] for m in messages])
+        prompt_tokens = len(GLOBAL_TOKENIZER.encode(prompt_text))
+
+        # 포맷팅 등 오차 방지용 안전 마진 200토큰
+        dynamic_max_tokens = aligned_context - prompt_tokens - 200
+        print(f"📊 [토큰 정밀 계산] 입력 토큰: {prompt_tokens} / 응답 한도: {dynamic_max_tokens}")
+    else:
+        # 토크나이저 로드 실패 시 기존의 넉넉한 고정 마진 사용
+        dynamic_max_tokens = aligned_context - 4500
+        print(f"📊 [토큰 고정 계산] 응답 한도: {dynamic_max_tokens}")
+
     req_dict = {
         "model": LLAMA_SERVER_MODEL,
         "messages": messages,
         "stream": False,
-        "max_response_tokens": 1000,
-        # 🚨 [추가] Stop Token 설정: 원치 않는 태그나 발화 연장선에서 잘라내기
-        "stop": ["<end_of_turn>", "<eos>", "<|endoftext|>", "user:", "대화시작:"]
+        "max_response_tokens": dynamic_max_tokens,
+        "stop": ["<end_of_turn>", "<eos>", "<|endoftext|>", "user:", "대화시작:", "<turn|>", "<|turn>"]
     }
-
     # 2. Multipart 데이터 준비 (JSON은 문자열로 변환)
     data = {
         "request_json": json.dumps(req_dict)
@@ -239,7 +275,6 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
                     if os.path.exists(path):
                         try:
                             f = stack.enter_context(open(path, "rb"))
-                            # 키 이름을 'images'로 통일하여 리스트로 전송 (서버측 처리 방식에 따름)
                             files.append(("images", (os.path.basename(path), f, "image/jpeg")))
                             print(f"📷 [이미지 첨부] {path}")
                         except Exception as e:
@@ -254,12 +289,17 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
         # 5. 응답 파싱
         result = response["choices"][0]["message"]["content"].strip()
 
-        # 🚨 [추가] 정규식을 활용한 특수 태그 및 속마음(Thought) 블록 강제 제거
-        # <|channel>thought ... <channel|> 형태 등 예측 가능한 찌꺼기 태그 제거
+        # 🚨 정규식을 활용한 특수 태그 및 속마음(Thought) 블록 강제 제거
         result = re.sub(r'<\|channel\|>.*?<\|channel\|>', '', result, flags=re.DOTALL)
         result = re.sub(r'<\|channel>.*?<channel\|>', '', result, flags=re.DOTALL)
-        result = re.sub(r'<\|channel\|>.*', '', result, flags=re.DOTALL)  # 닫히지 않은 태그 처리
-        result = result.replace("<end_of_turn>", "")  # 포함되어 나왔을 경우 2차 방어
+        result = re.sub(r'<\|channel\|>.*', '', result, flags=re.DOTALL)
+
+        # 🚨 [수정됨] 찌꺼기 태그 2차 방어 (포함되어 나왔을 경우 문자열 치환으로 완벽 제거)
+        result = result.replace("<end_of_turn>", "")
+        result = result.replace("<turn|>", "")  # 문장 끝에 붙는 태그 제거
+        result = result.replace("<|turn>", "")  # 혹시 모를 시작 태그 제거
+        result = result.replace("<bos>", "")
+        result = result.replace("<eos>", "")
 
         result = result.strip()
 

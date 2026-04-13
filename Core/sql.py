@@ -143,7 +143,7 @@ class MySQLManager:
             cur.close()
 
             conversation_log = []
-            conversation_log.append("다음은 멜리사와 루시아 당신의 이전 대화 기록입니다. 이를 참고하여 맥락을 유지하고 자연스러운 대화를 이어가세요")
+            conversation_log.append("다음은 멜리사와 루시아 당신의 이전 대화 기록입니다. 이를 참고하여 맥락을 유지하고 자연스러운 대화를 이어가세요\n <이전 대화 기록 시작|>")
 
             for log in reversed(logs):
                 if server_config.LLM.COMMU_LOG_TIME:
@@ -152,7 +152,7 @@ class MySQLManager:
                 else:
                     conversation_log.append(f"멜리사 : {log['user']}")
                     conversation_log.append(f"루시아 : {log['assistant']}\n")
-
+            conversation_log.append("<이전 대화 기록 끝|>")
             self.close()
             return "\n".join(conversation_log)
 
