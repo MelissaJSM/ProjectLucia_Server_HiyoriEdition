@@ -30,7 +30,7 @@ class LLM:
     """LLM (Large Language Model) 관련 설정"""
     LOCATION: str = ""          # 모델 폴더 경로
     LOCATION_MODEL: str = ""    # 모델 파일/폴더명
-    MODEL_TYPE: str = "gemma"   # 모델 타입 (gemma, phi 등)
+    MODEL_TYPE: str = "gemma"   # 모델 타입 (gemma, gemma4 등)
     
     # 모델 로드 옵션
     CACHE_QUANT = ""            # 캐시 양자화 (4bit, 8bit 등)

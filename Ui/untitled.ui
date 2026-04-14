@@ -66,7 +66,7 @@ px;   /* 최소 가로 크기 */
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>5</number>
+        <number>0</number>
        </property>
        <property name="elideMode">
         <enum>Qt::ElideNone</enum>
@@ -357,8 +357,7 @@ p, li { white-space: pre-wrap; }
               </rect>
              </property>
              <property name="toolTip">
-              <string>Gemma3 최대 : 128000
-Phi4 최대 : 12400</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Gemma3 최대 : 128000&lt;/p&gt;&lt;p&gt;Gemma4 최대 : 256000&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
              <property name="maximum">
               <number>128000</number>
@@ -377,7 +376,7 @@ Phi4 최대 : 12400</string>
               </rect>
              </property>
              <property name="toolTip">
-              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;모델을 선택합니다.&lt;/p&gt;&lt;p&gt;현재는 Gemma 및 Phi(실험단계) 만 가능합니다.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;모델을 선택합니다.&lt;/p&gt;&lt;p&gt;현재는 Gemma3 및 Gemma4 만 가능합니다.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
              <property name="text">
               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:11pt;&quot;&gt;모델 선택&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -392,12 +391,12 @@ Phi4 최대 : 12400</string>
                <height>31</height>
               </rect>
              </property>
-             <widget class="QRadioButton" name="PhiRadioButton">
+             <widget class="QRadioButton" name="Gemma4RadioButton">
               <property name="geometry">
                <rect>
-                <x>130</x>
+                <x>100</x>
                 <y>-1</y>
-                <width>51</width>
+                <width>81</width>
                 <height>31</height>
                </rect>
               </property>
@@ -405,7 +404,7 @@ Phi4 최대 : 12400</string>
                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;실험 단계입니다. 부정확 할 수 있습니다.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
               <property name="text">
-               <string>Phi</string>
+               <string>Gemma 4</string>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -417,14 +416,14 @@ Phi4 최대 : 12400</string>
              <widget class="QRadioButton" name="GemmaRadioButton">
               <property name="geometry">
                <rect>
-                <x>40</x>
+                <x>10</x>
                 <y>-1</y>
-                <width>71</width>
+                <width>81</width>
                 <height>31</height>
                </rect>
               </property>
               <property name="text">
-               <string>Gemma</string>
+               <string>Gemma 3</string>
               </property>
               <property name="checked">
                <bool>true</bool>
@@ -5138,7 +5137,7 @@ QGroupBox::title {
           </widget>
           <widget class="QWidget" name="tab_8">
            <attribute name="title">
-            <string>Phi-4</string>
+            <string>Gemma4</string>
            </attribute>
            <widget class="QStackedWidget" name="Phi4StackedWidget">
             <property name="geometry">
@@ -5660,7 +5659,7 @@ QGroupBox::title {
              </widget>
             </widget>
            </widget>
-           <widget class="QPushButton" name="Phi4PrevButton">
+           <widget class="QPushButton" name="Gemma4PrevButton">
             <property name="geometry">
              <rect>
               <x>480</x>
@@ -5673,7 +5672,7 @@ QGroupBox::title {
              <string>이전</string>
             </property>
            </widget>
-           <widget class="QPushButton" name="Phi4NextButton">
+           <widget class="QPushButton" name="Gemma4NextButton">
             <property name="geometry">
              <rect>
               <x>620</x>
@@ -6745,8 +6744,7 @@ p, li { white-space: pre-wrap; }
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;    &lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;    &lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;      &lt;span style=&quot; font-size:16pt; font-weight:600;&quot;&gt;   · &lt;/span&gt;&lt;span style=&quot; font-size:14pt; font-weight:600;&quot;&gt;프로젝트에 사용된 외부 라이브러리 / 프로젝트는 다음과 같습니다.&lt;/span&gt;&lt;span style=&quot; font-size:16pt; font-weight:600;&quot;&gt;      &lt;/span&gt;        &lt;/p&gt;
-&lt;p style=&quot; margin-top:10px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;      &lt;span style=&quot; font-size:14pt;&quot;&gt;        - &lt;/span&gt;&lt;a href=&quot;https://ai.google.dev/gemma?hl=ko&quot;&gt;&lt;span style=&quot; font-size:14pt; text-decoration: underline; color:#000000;&quot;&gt;Google / Gemma3, 3n&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;    &lt;/span&gt;        &lt;/p&gt;
-&lt;p style=&quot; margin-top:5px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;      &lt;span style=&quot; font-size:14pt;&quot;&gt;        - &lt;/span&gt;&lt;a href=&quot;https://huggingface.co/collections/microsoft/phi-4-677e9380e514feb5577a40e4&quot;&gt;&lt;span style=&quot; font-size:14pt; text-decoration: underline; color:#000000;&quot;&gt;Microsoft / Phi-4&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;      &lt;/span&gt;        &lt;/p&gt;
+&lt;p style=&quot; margin-top:10px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;      &lt;span style=&quot; font-size:14pt;&quot;&gt;        - &lt;/span&gt;&lt;a href=&quot;https://ai.google.dev/gemma?hl=ko&quot;&gt;&lt;span style=&quot; font-size:14pt; text-decoration: underline; color:#000000;&quot;&gt;Google / Gemma3, 4&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;    &lt;/span&gt;        &lt;/p&gt;
 &lt;p style=&quot; margin-top:5px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;      &lt;span style=&quot; font-size:14pt;&quot;&gt;        - &lt;/span&gt;&lt;a href=&quot;https://huggingface.co/MelissaJ/koelectra-emotion-6-emotion-base&quot;&gt;&lt;span style=&quot; font-size:14pt; text-decoration: underline; color:#000000;&quot;&gt;MelissaJ / koelectra-emotion-6-emotion-base&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;      &lt;/span&gt;        &lt;/p&gt;
 &lt;p style=&quot; margin-top:5px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;      &lt;span style=&quot; font-size:14pt;&quot;&gt;        - &lt;/span&gt;&lt;a href=&quot;https://github.com/RVC-Boss/GPT-SoVITS&quot;&gt;&lt;span style=&quot; font-size:14pt; text-decoration: underline; color:#000000;&quot;&gt;RVC-Boss / GPT-SoVITS&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;    &lt;/span&gt;        &lt;/p&gt;
 &lt;p style=&quot; margin-top:5px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;      &lt;span style=&quot; font-size:14pt;&quot;&gt;        - &lt;/span&gt;&lt;a href=&quot;https://github.com/turboderp-org/exllamav3&quot;&gt;&lt;span style=&quot; font-size:14pt; text-decoration: underline; color:#000000;&quot;&gt;turboderp-org / exllama3&lt;/span&gt;&lt;/a&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;     &lt;/span&gt;  &lt;/p&gt;

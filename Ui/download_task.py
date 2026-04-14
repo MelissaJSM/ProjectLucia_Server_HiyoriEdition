@@ -46,7 +46,7 @@ class DownloadTask(QObject):
 
         # [수정] 모델 종류에 따라 하위 폴더 자동 분류
         sub_folder = ""
-        if "Gemma" in key or "Phi" in key:
+        if "Gemma" in key or "Gemma4" in key:
             sub_folder = "LLM"
         elif "TTS" in key:
             sub_folder = "TTS"

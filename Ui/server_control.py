@@ -81,7 +81,7 @@ class ServerControl(QObject):
     """
     서버 프로세스(Main, LLM, TTS)의 생명주기를 관리하고 상태를 UI에 반영하는 클래스입니다.
     """
-    statusChanged = pyqtSignal(str) # 상태 변경 시그널
+    statusChanged = pyqtSignal(str)  # 상태 변경 시그널
 
     def __init__(
             self,
@@ -105,13 +105,13 @@ class ServerControl(QObject):
         # ─────────────────────────────────────────────
         # 프로세스 객체 초기화
         # ─────────────────────────────────────────────
-        self.proc = QProcess(self)      # 메인 서버 (FastAPI/Uvicorn)
+        self.proc = QProcess(self)  # 메인 서버 (FastAPI/Uvicorn)
         self.proc_llm = QProcess(self)  # LLM 서버 (ExLlamaV3)
         self.proc_tts = QProcess(self)  # TTS 서버 (GPT-SoVITS)
 
         # 프로세스 시그널 연결
         for p in (self.proc, self.proc_llm, self.proc_tts):
-            p.setProcessChannelMode(QProcess.MergedChannels) # stdout/stderr 병합
+            p.setProcessChannelMode(QProcess.MergedChannels)  # stdout/stderr 병합
             p.readyReadStandardOutput.connect(self._on_output)
             p.readyReadStandardError.connect(self._on_output)
             p.finished.connect(self._on_finished)
@@ -132,27 +132,27 @@ class ServerControl(QObject):
 
         # UI 컨트롤 참조 저장소
         self._controls = {
-            "startstop": None, 
-            "restart": None, 
-            "status_in": None, 
-            "status_out": None, 
+            "startstop": None,
+            "restart": None,
+            "status_in": None,
+            "status_out": None,
             "status_llm": None,
             "status_tts": None,
             "status_audio": None
         }
-        
+
         self._status = "stopped"
         self._timer = None
         self._pending_restart = False
-        self._intentional_stop = False # 의도적인 정지 여부 플래그
+        self._intentional_stop = False  # 의도적인 정지 여부 플래그
 
         # 초기 상태 전파
         self.statusChanged.connect(self._update_controls)
         self.statusChanged.emit(self._status)
 
-    def bind_controls(self, startstop_btn=None, restart_btn=None, 
-                      status_in_widget=None, status_out_widget=None, 
-                      status_llm_widget=None, status_tts_widget=None, 
+    def bind_controls(self, startstop_btn=None, restart_btn=None,
+                      status_in_widget=None, status_out_widget=None,
+                      status_llm_widget=None, status_tts_widget=None,
                       status_audio_widget=None):
         """UI 위젯들을 컨트롤러에 연결합니다."""
         self._controls["startstop"] = startstop_btn
@@ -169,7 +169,7 @@ class ServerControl(QObject):
             restart_btn.clicked.connect(self._on_click_restart)
 
         self._update_controls(self._status)
-        
+
         # 초기 상태 표시 (정지됨)
         self._update_status_llm("stopped")
         self._update_status_tts("stopped")
@@ -179,10 +179,12 @@ class ServerControl(QObject):
         if self.parent and hasattr(self.parent, "ModelCustomCheckBox") and hasattr(self.parent, "LLMAdvancedButton"):
             chk = self.parent.ModelCustomCheckBox
             btn = self.parent.LLMAdvancedButton
-            
+
             btn.setEnabled(chk.isChecked())
-            try: chk.toggled.disconnect(btn.setEnabled)
-            except TypeError: pass
+            try:
+                chk.toggled.disconnect(btn.setEnabled)
+            except TypeError:
+                pass
             chk.toggled.connect(btn.setEnabled)
 
     def start(self):
@@ -224,7 +226,7 @@ class ServerControl(QObject):
         # ─────────────────────────────────────────────
         llama_model_path = f"{server_config.LLM.LOCATION}/{server_config.LLM.LOCATION_MODEL}"
         llm_script = os.path.join(project_root, "Core", "ExLlamaV3", "server.py")
-        
+
         # Context Size 보정 (256의 배수)
         try:
             context_val = int(server_config.LLM.CONTEXT)
@@ -251,13 +253,13 @@ class ServerControl(QObject):
         if self.parent:
             if hasattr(self.parent, "GemmaRadioButton") and self.parent.GemmaRadioButton.isChecked():
                 model_type = "gemma"
-            elif hasattr(self.parent, "PhiRadioButton") and self.parent.PhiRadioButton.isChecked():
-                model_type = "phi"
-            
+            elif hasattr(self.parent, "Gemma4RadioButton") and self.parent.Gemma4RadioButton.isChecked():
+                model_type = "Gemma4"
+
             use_custom = False
             if hasattr(self.parent, "ModelCustomCheckBox"):
                 use_custom = self.parent.ModelCustomCheckBox.isChecked()
-            
+
             if not use_custom:
                 # 프리셋 값 적용
                 if model_type == "gemma":
@@ -265,9 +267,9 @@ class ServerControl(QObject):
                         "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05,
                         "repetition_penalty": 1.1, "frequency_penalty": 0.2, "presence_penalty": 0.1
                     })
-                elif model_type == "phi":
+                elif model_type == "gemma4":
                     gen_params.update({
-                        "temperature": 1.5, "top_p": 0.85, "top_k": 50, "min_p": 0.1,
+                        "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05,
                         "repetition_penalty": 1.1, "frequency_penalty": 0.2, "presence_penalty": 0.1
                     })
 
@@ -293,7 +295,7 @@ class ServerControl(QObject):
             llama_args.extend(["--gpu_split", str(server_config.LLM.GPU_SPLIT)])
         if str(server_config.LLM.CACHE_QUANT) != "0":
             llama_args.extend(["--cache_quant", str(server_config.LLM.CACHE_QUANT)])
-        
+
         # Tensor Parallelism (UI 체크박스 우선)
         if self.parent and hasattr(self.parent, "ParallelCheckBox") and self.parent.ParallelCheckBox.isChecked():
             llama_args.append("--tensor_parallel")
@@ -308,19 +310,15 @@ class ServerControl(QObject):
         # ─────────────────────────────────────────────
         # 4. TTS 서버 실행 (GPT-SoVITS)
         # ─────────────────────────────────────────────
-        if server_config.TTS.TTS_ENABLE:
-            tts_script = os.path.join(project_root, "Core", "GptSoVits", "api_v2.py")
-            tts_args = [tts_script, "-a", TTS_HOST, "-p", str(TTS_PORT)]
-            tts_cwd = os.path.join(project_root, "Core", "GptSoVits")
-            
-            self.proc_tts.setWorkingDirectory(tts_cwd)
-            self.proc_tts.setProcessEnvironment(env_tts)
-            logger.info(f"TTS 시작: {' '.join(tts_args)}")
-            self._update_status_tts("booting")
-            self.proc_tts.start(pyexe, tts_args)
-        else:
-            logger.info("TTS 비활성화됨 (TTS_ENABLE=False)")
-            self._update_status_tts("stopped")
+        tts_script = os.path.join(project_root, "Core", "GptSoVits", "api_v2.py")
+        tts_args = [tts_script, "-a", TTS_HOST, "-p", str(TTS_PORT)]
+        tts_cwd = os.path.join(project_root, "Core", "GptSoVits")
+
+        self.proc_tts.setWorkingDirectory(tts_cwd)
+        self.proc_tts.setProcessEnvironment(env_tts)
+        logger.info(f"TTS 시작: {' '.join(tts_args)}")
+        self._update_status_tts("booting")
+        self.proc_tts.start(pyexe, tts_args)
 
         # ─────────────────────────────────────────────
         # 5. 메인 서버 실행 (FastAPI)
@@ -331,14 +329,14 @@ class ServerControl(QObject):
         logger.info(f"Main 시작: {program} {' '.join(args)}")
         self._set_status("running(process)")
         self.proc.start(program, args)
-        
+
         # 헬스 체크 시작
         self._poll_health_ready()
 
     def stop(self, timeout_ms=2000):
         """모든 서버 프로세스를 종료합니다."""
         self._intentional_stop = True
-        
+
         self._stop_process(self.proc, "Main", self.port, timeout_ms)
         self._stop_process(self.proc_llm, "LLM", LLAMA_PORT, timeout_ms)
         self._stop_process(self.proc_tts, "TTS", TTS_PORT, timeout_ms)
@@ -380,7 +378,7 @@ class ServerControl(QObject):
     def _prepare_environment(self) -> QProcessEnvironment:
         """공통 환경 변수를 설정합니다."""
         env = QProcessEnvironment.systemEnvironment()
-        
+
         # GPU 순서 고정 (PCI Bus ID 기준)
         env.insert("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
 
@@ -411,7 +409,7 @@ class ServerControl(QObject):
         env.insert("LLAMA_SERVER_URL", f"http://{LLAMA_HOST}:{LLAMA_PORT}")
         env.insert("LLAMA_SERVER_MODEL", server_config.LLM.LOCATION_MODEL)
         env.insert("TTS_SERVER_URL", f"http://{TTS_HOST}:{TTS_PORT}")
-        
+
         return env
 
     def _stop_process(self, process: QProcess, name: str, port: int, timeout: int):
@@ -419,10 +417,10 @@ class ServerControl(QObject):
         if process.state() != QProcess.NotRunning:
             logger.info(f"{name} 서버 종료 중...")
             pid = process.processId()
-            
+
             if pid > 0:
                 self._terminate_tree(pid)
-            
+
             process.terminate()
             if not process.waitForFinished(timeout):
                 logger.warning(f"{name} 서버 강제 종료 시도")
@@ -472,7 +470,7 @@ class ServerControl(QObject):
         sender = self.sender()
         prefix_map = {self.proc: "[Main]", self.proc_llm: "[LLM]", self.proc_tts: "[TTS]"}
         prefix = prefix_map.get(sender, "[Server]")
-        
+
         logger.info(f"{prefix} 종료됨 (code={code}, status={status})")
 
         if not self._intentional_stop:
@@ -519,7 +517,7 @@ class ServerControl(QObject):
         sender = self.sender()
         prefix_map = {self.proc: "[Main]", self.proc_llm: "[LLM]", self.proc_tts: "[TTS]"}
         prefix = prefix_map.get(sender, "[Server]")
-        
+
         logger.error(f"{prefix} 프로세스 오류 발생: {err}")
         self._mark_error_hint()
         self._set_status("오류 발생")
@@ -536,7 +534,7 @@ class ServerControl(QObject):
         for line in data.splitlines():
             if not line.strip() or any(k in line for k in NOISY_KEYWORDS):
                 continue
-            
+
             tz = pytz.timezone("Asia/Seoul")
             now = datetime.now(tz).strftime("[%Y-%m-%d %H:%M:%S] ")
 
@@ -566,20 +564,15 @@ class ServerControl(QObject):
             self._update_status_out_widget("stopped")
             self._update_status_audio("stopped")
             return
-        
+
         # 메인 서버 체크
         self._probe_health_once()
         self._probe_hb_once()
 
         # 서브 서버 체크 (소켓 연결)
         self._check_sub_server_status(self.proc_llm, LLAMA_HOST, LLAMA_PORT, self._update_status_llm)
-        
-        # TTS 서버 체크 (TTS_ENABLE일 때만)
-        if server_config.TTS.TTS_ENABLE:
-            self._check_sub_server_status(self.proc_tts, TTS_HOST, TTS_PORT, self._update_status_tts)
-        else:
-            self._update_status_tts("stopped")
-        
+        self._check_sub_server_status(self.proc_tts, TTS_HOST, TTS_PORT, self._update_status_tts)
+
         # 오디오 서버 체크
         if self.proc.state() != QProcess.NotRunning:
             if self._can_connect(AUDIO_SERVER_HOST, AUDIO_SERVER_PORT):
@@ -634,7 +627,8 @@ class ServerControl(QObject):
         try:
             if reply.error() == reply.NoError:
                 data = json.loads(bytes(reply.readAll()))
-                ok = (reply.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 200 and int(data.get("active_count", 0)) >= 1)
+                ok = (reply.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 200 and int(
+                    data.get("active_count", 0)) >= 1)
         except Exception:
             ok = False
         finally:
@@ -678,8 +672,9 @@ class ServerControl(QObject):
 
     def _best_server_cmd_program_args(self, pyexe: str):
         program = pyexe
-        workers = 1 # uvicorn 워커는 1로 고정 (내부 Executor 사용)
-        args = ["-m", "uvicorn", self.module_spec, "--host", self.host, "--port", str(self.port), "--workers", str(workers)]
+        workers = 1  # uvicorn 워커는 1로 고정 (내부 Executor 사용)
+        args = ["-m", "uvicorn", self.module_spec, "--host", self.host, "--port", str(self.port), "--workers",
+                str(workers)]
         return program, args
 
     def _pids_listening_on(self, port: int) -> Set[int]:
@@ -702,15 +697,19 @@ class ServerControl(QObject):
             proc = psutil.Process(pid)
             children = proc.children(recursive=True)
             for p in children:
-                try: p.terminate()
-                except psutil.NoSuchProcess: pass
-            
+                try:
+                    p.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+
             proc.terminate()
             gone, alive = psutil.wait_procs(children + [proc], timeout=timeout)
-            
+
             for p in alive:
-                try: p.kill()
-                except psutil.NoSuchProcess: pass
+                try:
+                    p.kill()
+                except psutil.NoSuchProcess:
+                    pass
             logger.info(f"PID {pid} 프로세스 트리 종료 완료")
 
         except psutil.NoSuchProcess:
@@ -721,7 +720,7 @@ class ServerControl(QObject):
         for i in range(retries):
             pids = self._pids_listening_on(port)
             if not pids: return True
-            logger.info(f"포트 {port} 점유 PID 종료 시도 ({i+1}/{retries}): {pids}")
+            logger.info(f"포트 {port} 점유 PID 종료 시도 ({i + 1}/{retries}): {pids}")
             for pid in pids:
                 self._terminate_tree(pid)
             time.sleep(1.0)
@@ -755,7 +754,7 @@ class ServerControl(QObject):
 
     def _update_status_widget(self, widget, text_map, color_map, status, prefix, error_hint=False):
         if not widget: return
-        
+
         color = "#d9534f" if error_hint and status != "오류 발생" else color_map.get(status, "#333")
         text = text_map.get(status, status)
         full_text = f"{prefix} {text}".strip()
@@ -767,7 +766,7 @@ class ServerControl(QObject):
             widget.setText(full_text)
             widget.setStyleSheet(f"color: {color}; font-weight: bold;")
 
-    def _update_status_in_widget(self, status: str, error_hint: bool=False):
+    def _update_status_in_widget(self, status: str, error_hint: bool = False):
         text_map = {
             "stopped": "", "running(process)": "",
             "running(booting)": "", "running(ready)": "",
@@ -779,7 +778,7 @@ class ServerControl(QObject):
         }
         self._update_status_widget(self._controls["status_in"], text_map, color_map, status, "■", error_hint)
 
-    def _update_status_out_widget(self, status: str, error_hint: bool=False):
+    def _update_status_out_widget(self, status: str, error_hint: bool = False):
         text_map = {
             "stopped": "", "running(booting)": "",
             "running(ready)": "", "오류 발생": "",

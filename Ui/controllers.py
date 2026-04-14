@@ -62,7 +62,7 @@ class NavController:
         # 필수 위젯 존재 여부 확인
         required_widgets = (
             "Gemma3PrevButton", "Gemma3NextButton",
-            "Phi4PrevButton", "Phi4NextButton",
+            "Gemma44PrevButton", "Gemma44NextButton",
             "Gemma3StackedWidget", "Phi4StackedWidget"
         )
         
@@ -633,7 +633,7 @@ class SystemController:
         if model_type == "gemma":
             if hasattr(self.w, "GemmaRadioButton"): self.w.GemmaRadioButton.setChecked(True)
         elif model_type == "phi":
-            if hasattr(self.w, "PhiRadioButton"): self.w.PhiRadioButton.setChecked(True)
+            if hasattr(self.w, "Gemma4RadioButton"): self.w.Gemma4RadioButton.setChecked(True)
 
     def _apply_gpu_config(self, data, saved_gpus, is_valid):
         """GPU 관련 설정(체크박스, 스핀박스, TTS 라디오버튼) 반영"""
@@ -807,7 +807,7 @@ class SystemController:
 
         # [NEW] 모델 타입 라디오 버튼 상태 저장
         model_type = "gemma"
-        if hasattr(self.w, "PhiRadioButton") and self.w.PhiRadioButton.isChecked():
+        if hasattr(self.w, "Gemma4RadioButton") and self.w.Gemma4RadioButton.isChecked():
             model_type = "phi"
 
         # 데이터 구성
