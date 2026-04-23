@@ -78,6 +78,7 @@ class ChatRequestConfig(BaseModel):
 
     thinking_budget: Optional[int] = None
     no_think: bool = False
+    tools: Optional[List[Dict[str, Any]]] = None
 
     # 샘플링 옵션 (기본값은 나중에 args가 로드된 후 설정됨)
     temperature: Optional[float] = None
@@ -147,7 +148,10 @@ async def chat_endpoint_binary(
             if tt and tt[0]: banned_strings.append(tt[0])
             if tt and tt[1]: banned_strings.append(tt[1])
 
-        use_think = True
+        # 🟢 클라이언트에서 no_think=True를 보내면 꺼지도록 수정 (권장)
+        use_think = not req.no_think
+        # use_think = False #수동 설정
+        print(f"🧠 [Think 모드 상태]: {'켜짐 (ON) - 추론/사고 중...' if use_think else '꺼짐 (OFF) - 초고속 대답 모드!'}")
 
         system_prompt = prompt_format.default_system_prompt(think=use_think)
         chat_history = []
@@ -174,11 +178,12 @@ async def chat_endpoint_binary(
             new_msg = f"{placeholders}\n{last_user_msg}"
             chat_history[-1] = (new_msg, last_asst_msg)
 
-        if system_prompt and chat_history:
-            first_user_msg, first_asst_msg = chat_history[0]
-            chat_history[0] = (f"{system_prompt}\n\n{first_user_msg}", first_asst_msg)
-
-        full_prompt = prompt_format.format(system_prompt="", messages=chat_history, think=use_think)
+        # 🟢 [수정됨] chat_templates.py의 인자 충돌을 피하기 위해 tools 인자 전달 제거
+        full_prompt = prompt_format.format(
+            system_prompt=system_prompt,
+            messages=chat_history,
+            think=use_think
+        )
 
         prompt_ids = tokenizer.encode(full_prompt)
         prompt_tokens = prompt_ids.shape[-1]

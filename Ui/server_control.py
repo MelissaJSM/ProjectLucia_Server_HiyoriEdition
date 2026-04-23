@@ -254,7 +254,7 @@ class ServerControl(QObject):
             if hasattr(self.parent, "GemmaRadioButton") and self.parent.GemmaRadioButton.isChecked():
                 model_type = "gemma"
             elif hasattr(self.parent, "Gemma4RadioButton") and self.parent.Gemma4RadioButton.isChecked():
-                model_type = "Gemma4"
+                model_type = "gemma4"
 
             use_custom = False
             if hasattr(self.parent, "ModelCustomCheckBox"):

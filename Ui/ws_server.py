@@ -18,7 +18,7 @@ import threading
 import http.server
 import socketserver
 import ast
-import urllib.request  # 워밍업 직접 호출을 위해 추가
+import urllib.request
 from typing import Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -54,27 +54,20 @@ except Exception:
 # 설정 및 상수
 # ──────────────────────────────────────────────────────────────────────────────
 
-# 오디오 및 임시 이미지 저장 경로
 AUDIO_SAVE_PATH = os.environ.get("AUDIO_SAVE_PATH", "audio_files")
 os.makedirs(AUDIO_SAVE_PATH, exist_ok=True)
 
 TEMP_IMAGE_PATH = os.path.join(os.path.dirname(AUDIO_SAVE_PATH), "temp_images")
 os.makedirs(TEMP_IMAGE_PATH, exist_ok=True)
 
-# 하트비트 설정
 HEARTBEAT_INTERVAL = 1.0
 HEARTBEAT_TIMEOUT = 60.0
 
-# 관리자 토큰
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
-
-# 파일 서버 포트 (server_config에서 로드)
 FILE_SERVER_PORT = server_config.PORTS.AUDIO_SERVER_PORT
 
 # [STATE STORE] 클라이언트별 화면 관찰 상태 저장소
 client_states: Dict[str, Dict[str, Any]] = {}
-
-# [서버 상태 플래그] 워밍업 완료 여부를 추적하여 UI 동기화에 사용
 SERVER_IS_READY = False
 
 
@@ -83,7 +76,6 @@ SERVER_IS_READY = False
 # ──────────────────────────────────────────────────────────────────────────────
 
 def get_all_vram_info() -> List[Dict[str, Any]]:
-    """모든 GPU의 VRAM 사용량 정보를 조회합니다."""
     infos = []
     if not _HAS_NVML: return infos
     try:
@@ -96,7 +88,7 @@ def get_all_vram_info() -> List[Dict[str, Any]]:
             infos.append({
                 "gpu_id": i,
                 "gpu_name": name,
-                "gpu_used": m.used // 1024 ** 2,  # MB 단위
+                "gpu_used": m.used // 1024 ** 2,
                 "gpu_total": m.total // 1024 ** 2
             })
         nvmlShutdown()
@@ -106,7 +98,6 @@ def get_all_vram_info() -> List[Dict[str, Any]]:
 
 
 async def ws_error(ws: WebSocket, message: str, code: int = 500):
-    """WebSocket을 통해 에러 메시지를 전송합니다."""
     try:
         await ws.send_json({"op": "error", "code": code, "message": message})
     except Exception:
@@ -114,7 +105,6 @@ async def ws_error(ws: WebSocket, message: str, code: int = 500):
 
 
 def _cleanup_temp_images(paths: List[str]):
-    """임시 이미지 파일들을 삭제합니다."""
     if not paths: return
     for path in paths:
         if path and os.path.exists(path):
@@ -125,12 +115,10 @@ def _cleanup_temp_images(paths: List[str]):
 
 
 class AudioFileHandler(http.server.SimpleHTTPRequestHandler):
-    """생성된 오디오 파일을 제공하기 위한 HTTP 핸들러"""
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=AUDIO_SAVE_PATH, **kwargs)
 
-    def log_message(self, format, *args): pass  # 로그 출력 억제
+    def log_message(self, format, *args): pass
 
     def do_GET(self):
         if self.path.startswith("/audio/"): self.path = self.path.replace("/audio/", "/", 1)
@@ -138,7 +126,6 @@ class AudioFileHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def start_file_server():
-    """백그라운드 스레드에서 파일 서버를 시작합니다."""
     retries = 5
     for i in range(retries):
         try:
@@ -171,19 +158,17 @@ class ConnectionManager:
         try:
             await websocket.send_json({"op": "hello", "client_id": client_id})
         except Exception:
-            print(f"⚠️ [WS] 클라이언트가 인사 메시지를 받기 전 연결을 끊었습니다: {client_id}")
+            pass
 
     def disconnect(self, client_id: str):
         if client_id in self.active:
             del self.active[client_id]
             del self.last_seen[client_id]
             print(f"[WS] disconnected: {client_id}")
-
             if client_id in client_states:
                 state = client_states.pop(client_id)
                 stored_images = state.get("stored_images", [])
                 if stored_images:
-                    print(f"🧹 Cleaning up {len(stored_images)} temp images for {client_id}")
                     _cleanup_temp_images(stored_images)
 
     def mark_seen(self, client_id: str):
@@ -215,11 +200,10 @@ async def _heartbeat_loop():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Service Check Helpers (내부 서비스 상태 확인)
+# Service Check Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
 async def check_port_open(host: str, port: int) -> bool:
-    """비동기로 특정 호스트:포트 연결 가능 여부를 확인합니다."""
     try:
         future = asyncio.open_connection(host, port)
         reader, writer = await asyncio.wait_for(future, timeout=0.5)
@@ -231,26 +215,20 @@ async def check_port_open(host: str, port: int) -> bool:
 
 
 async def wait_for_services(timeout: int = 60) -> bool:
-    """LLM, TTS, Audio 서버가 모두 준비될 때까지 대기합니다."""
     start_time = time.time()
     while time.time() - start_time < timeout:
         llm_ok = await check_port_open(server_config.PORTS.LLAMA_HOST, server_config.PORTS.LLAMA_PORT)
-
         tts_ok = True
         if server_config.TTS.TTS_ENABLE:
             tts_ok = await check_port_open(server_config.PORTS.TTS_HOST, server_config.PORTS.TTS_PORT)
-
         audio_ok = await check_port_open("127.0.0.1", FILE_SERVER_PORT)
-
-        if llm_ok and tts_ok and audio_ok:
-            return True
-
+        if llm_ok and tts_ok and audio_ok: return True
         await asyncio.sleep(1.0)
     return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Init & Lifespan (서버 시작/종료 시 처리 및 스텔스 워밍업)
+# Init & Lifespan
 # ──────────────────────────────────────────────────────────────────────────────
 
 def init_server_settings():
@@ -260,85 +238,52 @@ def init_server_settings():
         server_config.LLM.COMMU_LOG_TIME = bool(settings.get("commu_log_time", 0))
         server_config.LLM.COMMU_LOG_INTERVAL = int(settings.get("commu_log_interval", 10))
         db.close()
-    except Exception as e:
-        print(f"⚠️ Settings load failed: {e}")
+    except Exception:
+        pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI 앱의 수명 주기 관리 및 비동기 워밍업"""
     global SERVER_IS_READY
     init_server_settings()
-
-    # 파일 서버 스레드 시작
     global _file_server_thread
     _file_server_thread = threading.Thread(target=start_file_server, daemon=True)
     _file_server_thread.start()
 
-    # 🚀 백그라운드 스텔스 워밍업
     async def do_warmup():
         global SERVER_IS_READY
-        print("⏳ Waiting for internal services to be ready for warmup...")
-
-        # LLM/TTS 포트가 열릴 때까지 최대 120초 대기
         is_ready = await wait_for_services(timeout=120)
-
         if is_ready:
-            print("🔥 Services are online! Executing stealth warmup...")
             try:
                 def _run():
                     init_tokenizer()
-                    # 1. [추가됨] 감정 분석기 워밍업 (HuggingFace 로컬 모델 200MB 지연 로딩 해소!)
                     try:
-                        _ = analyze_emotion("테스트")
-                        print("✅ Emotion Analyzer warmed up.")
-                    except Exception as e:
-                        print(f"⚠️ Emotion Analyzer Warmup warning: {e}")
-
-                    # 2. [수정됨] LLM 직접 API 호출 (422 에러 해결을 위해 "model" 파라미터 추가)
+                        analyze_emotion("테스트")
+                    except Exception:
+                        pass
                     try:
-                        req_data = json.dumps({
-                            # model 파라미터를 아예 빼보거나,
-                            "messages": [{"role": "user", "content": "hello"}],
-                            "max_tokens": 5
-                        }).encode('utf-8')
-
+                        req_data = json.dumps(
+                            {"messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}).encode('utf-8')
                         req = urllib.request.Request(
                             f"http://{server_config.PORTS.LLAMA_HOST}:{server_config.PORTS.LLAMA_PORT}/v1/chat/completions",
-                            data=req_data,
-                            headers={'Content-Type': 'application/json'}
-                        )
-                        with urllib.request.urlopen(req, timeout=30) as response:
+                            data=req_data, headers={'Content-Type': 'application/json'})
+                        with urllib.request.urlopen(req, timeout=30) as _:
                             pass
-                        print("✅ LLM Server warmed up.")
-                    except Exception as e:
-                        print(f"⚠️ LLM Warmup warning (Ignored): {e}")
-
-                    # 3. TTS 호출 (사전 다운로드 및 텐서 초기화)
+                    except Exception:
+                        pass
                     if server_config.TTS.TTS_ENABLE:
                         try:
-                            _ = text_to_speech("아", "Neutral")
-                            print("✅ TTS Server warmed up.")
-                        except Exception as e:
-                            print(f"⚠️ TTS Warmup warning (Ignored): {e}")
+                            text_to_speech("아", "Neutral")
+                        except Exception:
+                            pass
 
                 await asyncio.to_thread(_run)
-                print("✅ Models are warmed up silently and ready!")
-            except Exception as e:
-                print(f"⚠️ Warmup failed: {e}")
-        else:
-            print("⚠️ Could not warmup. Internal services timeout.")
-
-        # 워밍업 성공 여부와 관계없이 프로세스가 끝났으므로 서비스 레디 상태로 전환
+            except Exception:
+                pass
         SERVER_IS_READY = True
 
-    # 워밍업을 백그라운드 태스크로 등록하여 FastAPI 시작을 블로킹하지 않음
     asyncio.create_task(do_warmup())
-
-    # 하트비트 태스크 시작
     hb_task = asyncio.create_task(_heartbeat_loop())
-    print("✅ Server Started")
-
     try:
         yield
     finally:
@@ -356,17 +301,13 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 
 @app.get("/health")
 async def health():
-    """서버 헬스 체크 엔드포인트"""
-    if not SERVER_IS_READY:
-        return JSONResponse(status_code=503, content={"status": "warming_up"})
+    if not SERVER_IS_READY: return JSONResponse(status_code=503, content={"status": "warming_up"})
     return PlainTextResponse("ok")
 
 
 @app.get("/hb/state")
 async def hb_state():
-    """현재 서버 상태(활성 연결 수, GPU 정보 등) 반환"""
-    if not SERVER_IS_READY:
-        return JSONResponse(status_code=503, content={"ok": False})
+    if not SERVER_IS_READY: return JSONResponse(status_code=503, content={"ok": False})
     return JSONResponse({"ok": True, "active_count": len(manager.active), "gpus": get_all_vram_info()})
 
 
@@ -391,130 +332,108 @@ async def upload_image(file: UploadFile = File(...)):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# WebSocket Handlers (비즈니스 로직)
+# WebSocket Handlers (핵심 비즈니스 로직)
 # ──────────────────────────────────────────────────────────────────────────────
 
 async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
+    # 1. 상태 초기화 및 Busy Lock 체크
+    if client_id not in client_states:
+        client_states[client_id] = {
+            "summary": "No record",
+            "stored_images": [],
+            "cooldown": 0,
+            "last_spoken": "None",
+            "is_processing": False  # 🟢 작업 중 플래그
+        }
+
+    state = client_states[client_id]
+
+    # 🚨 처리 중이면 새로운 요청 무시 (대기열 체증 방지)
+    if state.get("is_processing"):
+        return
+
     current_image_id = data.get("image_id")
     if not current_image_id: return
-
     current_image_path = os.path.join(TEMP_IMAGE_PATH, current_image_id)
     if not os.path.exists(current_image_path): return
 
-    state = client_states.get(client_id, {})
-
-    last_summary = state.get("summary", "No previous record")
-    cooldown = state.get("cooldown", 0)
-    stored_images = list(state.get("stored_images", []))
-    last_spoken = state.get("last_spoken", "None")
-
-    image_paths_for_llm = stored_images + [current_image_path]
-    count = len(image_paths_for_llm)
-
-    SPEECH_THRESHOLD = 6
-
-    if count >= 3:
-        img_context_str = "Input: [Img1(Past)] -> [Img2(Past)] -> [Img3(CURRENT)]."
-        task_str = "Task: Compare [CURRENT] with [Past]. Rate the DEGREE OF CHANGE/EVENT."
-    else:
-        img_context_str = "Input: [Img1(CURRENT)]."
-        task_str = "Task: Analyze the current screen."
-
-    analyze_prompt = (
-        "!!! SYSTEM COMMAND: ACT AS A SENSITIVE EVENT DETECTOR !!!\n"
-        f"{img_context_str}\n"
-        f"{task_str}\n"
-        "\n"
-        "RULES:\n"
-        "1. Output valid JSON only. NO COMMENTS.\n"
-        "2. **FOCUS ON THE ACTIVE WINDOW**: Check content changes inside the main window (e.g., Video scene change, Character pose, New tab).\n"
-        "3. **USE FULL RANGE (6-9)**: Do NOT stick to score 7. If it's cool/visual, give 8. If amazing, give 9.\n"
-        "4. **AVOID REPETITION**: Do not use the same summary/reason as the previous turn.\n"
-        "\n"
-        "SCORING GUIDELINES (Target: [CURRENT]):\n"
-        "- 0-3: [Static] Absolutely nothing changed. AFK.\n"
-        "- 4-5: [Minor] Mouse movement, slow scrolling, idle animation. (No Speech)\n"
-        "- 6-7: [Standard Change] Active window switch, New web page loaded, Character pose changed. (Speak Mildly)\n"
-        "- 8-9: [Exciting Update] Visuals became colorful, Game action started, Zoom-in, Video scene highlight. (Speak Excitedly)\n"
-        "- 10: [Critical] Game Over, Victory, Error Popup, Huge visual explosion.\n"
-        "\n"
-        "*** TIP: If the visual is 'Beautiful' or 'Dynamic', give 8 or 9. Don't be shy. ***\n"
-        "\n"
-        "OUTPUT JSON ONLY:\n"
-        "{\n"
-        '  "score": Integer(0-10),\n'
-        '  "summary": "Specific description of WHAT changed.",\n'
-        '  "reason": "Why did you pick this score? (Explain the visual intensity)"\n'
-        "}"
-    )
-
-    def step1_analyze():
-        return generate_llm_response(
-            user_input=analyze_prompt,
-            recent_conversation=[],
-            inputType=InputTypeValue.CHAT,
-            emotion="Neutral",
-            image_paths=image_paths_for_llm
-        )
+    # 🔒 분석 작업 시작 잠금
+    state["is_processing"] = True
 
     try:
+        last_summary = state.get("summary", "No previous record")
+        cooldown = state.get("cooldown", 0)
+        stored_images = list(state.get("stored_images", []))
+        last_spoken = state.get("last_spoken", "None")
+
+        image_paths_for_llm = stored_images + [current_image_path]
+        count = len(image_paths_for_llm)
+        SPEECH_THRESHOLD = 6
+
+        if count >= 3:
+            img_context_str = "Input: [Img1(Past)] -> [Img2(Past)] -> [Img3(CURRENT)]."
+            task_str = "Task: Compare [CURRENT] with [Past]. Rate the DEGREE OF CHANGE/EVENT."
+        else:
+            img_context_str = "Input: [Img1(CURRENT)]."
+            task_str = "Task: Analyze the current screen."
+
+        # 🟢 [수정됨] 불필요한 시스템 명령어(JSON 규칙 등) 제거. 순수 동적 데이터(상황과 목표)만 전달
+        analyze_prompt = f"{img_context_str}\n{task_str}"
+
+        def step1_analyze():
+            return generate_llm_response(
+                user_input=analyze_prompt,
+                recent_conversation=[],
+                inputType=InputTypeValue.OBSERVE,  # 🟢 자아를 분리한 순수 분석 모드
+                emotion="Neutral",
+                image_paths=image_paths_for_llm
+            )
+
         try:
-            raw_res_1 = await asyncio.wait_for(asyncio.to_thread(step1_analyze), timeout=8.0)
+            # 🟢 타임아웃 대폭 연장 (31B 모델의 이미지 3장 처리 대응)
+            raw_res_1 = await asyncio.wait_for(asyncio.to_thread(step1_analyze), timeout=30.0)
         except asyncio.TimeoutError:
-            print(f"⚠️ Observe Timeout (Infinite Gen blocked). Score set to 0.")
+            print(f"⚠️ [DEBUG] 1단계 분석 타임아웃 발생 (30초 초과)")
             raw_res_1 = '{"score": 0, "summary": "Timeout", "reason": "System Timeout"}'
 
+        # 🟢 JSON 추출 및 방어적 파싱 로직
         res_json = {}
-        json_str = ""
-        start_idx = raw_res_1.find('{')
+        try:
+            start_idx = raw_res_1.find('{')
+            if start_idx != -1:
+                json_str = raw_res_1[start_idx:raw_res_1.rfind('}') + 1]
+                res_json = json.loads(json_str)
+        except:
+            pass
 
-        if start_idx != -1:
-            json_str = raw_res_1[start_idx:]
-            json_str = json_str.replace("\u2581", " ")
-            json_str = re.sub(r'(?<![:"])\/\/.*', '', json_str)
-            json_str = re.sub(r'(?<![:"])\#.*', '', json_str)
-            json_str = re.sub(r'(?<=[{,])\s*[^"a-zA-Z0-9\s{]+', "", json_str)
-            try:
-                res_json, _ = json.JSONDecoder().raw_decode(json_str)
-            except:
-                try:
-                    res_json = ast.literal_eval(json_str)
-                except:
-                    pass
-
+        # JSON이 깨졌거나 점수가 없을 때 정규식 억지 추출
         if not res_json or "score" not in res_json:
-            score_match = re.search(r'["\']score["\']\s*:\s*(\d+)', raw_res_1)
+            score_match = re.search(r'score["\']?\s*[:=]\s*(\d+)', raw_res_1, re.I)
+            if not score_match:
+                score_match = re.search(r'(\d+)\s*점', raw_res_1)
+
             if score_match:
                 res_json["score"] = int(score_match.group(1))
             else:
-                res_json["score"] = 0
+                nums = re.findall(r'\b([0-9]|10)\b', raw_res_1)
+                res_json["score"] = int(nums[0]) if nums else 0
 
-            sum_match = re.search(r'["\']summary["\']\s*:\s*["\'](.*?)["\']', raw_res_1)
-            if sum_match:
-                res_json["summary"] = sum_match.group(1)
-            else:
-                res_json["summary"] = "화면의 시각적 정보를 참고하세요."
-
+            res_json["summary"] = raw_res_1[:50] + "..." if not res_json.get("summary") else res_json["summary"]
             res_json["reason"] = "Regex Fallback"
 
         score = int(res_json.get("score", 0))
         summary = res_json.get("summary", "")
-        reason = res_json.get("reason", "")
+        reason = res_json.get("reason", "Regex Fallback")
 
+        # 큐 정리
         next_stored_images = stored_images + [current_image_path]
         images_to_delete = []
         while len(next_stored_images) > 2:
-            oldest = next_stored_images.pop(0)
-            images_to_delete.append(oldest)
+            images_to_delete.append(next_stored_images.pop(0))
 
         if count < 3:
             print(f"👀 Observe[{client_id}]: Warm-up ({count}/3). Ignored.")
-            client_states[client_id] = {
-                "summary": summary,
-                "stored_images": next_stored_images,
-                "cooldown": 0,
-                "last_spoken": last_spoken
-            }
+            state.update({"summary": summary, "stored_images": next_stored_images})
             _cleanup_temp_images(images_to_delete)
             await websocket.send_json(
                 {"op": "observe_result", "should_speak": False, "message": None, "reason": "Warm-up"})
@@ -523,7 +442,6 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         should_speak = False
         message_to_send = None
         final_reason = reason
-
         emotion_res = "Neutral"
         audio_filename = None
         audio_url = None
@@ -539,11 +457,11 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         else:
             if cooldown > 0: cooldown -= 1
 
+        # 2단계: 루시아 대사 생성
         if should_speak:
-            current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(
-                recent_conversation="", userEmotion="", now=current_time_str
-            )
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(recent_conversation="", userEmotion="",
+                                                                     now=now_str)
 
             actor_prompt = (
                 f"{lucia_persona}\n"
@@ -557,7 +475,7 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                 "If score is 6-7: Say something mild/encouraging.\n"
                 "If score is 8-9: React with excitement/surprise! The visual is interesting.\n"
                 "\n"
-                "As Lucia, say something spontaneous to Melissa based on the CURRENT situation.\n"
+                "As Lucia, say something spontaneous based on the CURRENT situation.\n"
                 "\n"
                 "Output: Just one sentence in Korean. (No JSON)."
             )
@@ -566,25 +484,20 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                 return generate_llm_response(
                     user_input=actor_prompt,
                     recent_conversation=[],
-                    inputType=InputTypeValue.CHAT,
+                    inputType=InputTypeValue.CHAT,  # 🟡 여기는 정상적인 대화 모드로 자아 발동
                     emotion="Neutral",
                     image_paths=[current_image_path]
                 )
 
             try:
-                raw_res_2 = await asyncio.wait_for(asyncio.to_thread(step2_act), timeout=10.0)
+                raw_res_2 = await asyncio.wait_for(asyncio.to_thread(step2_act), timeout=15.0)
                 message_to_send = raw_res_2.replace('"', '').replace("Lucia:", "").strip()
 
                 if message_to_send:
                     def process_tts(text):
                         tts_text = re.sub(r'[^\u0000-\uFFFF]', '', text)
                         emo = analyze_emotion(text)
-
-                        if server_config.TTS.TTS_ENABLE:
-                            wav_bytes = text_to_speech(tts_text, emo)
-                        else:
-                            wav_bytes = None
-
+                        wav_bytes = text_to_speech(tts_text, emo) if server_config.TTS.TTS_ENABLE else None
                         return emo, wav_bytes
 
                     emo, wav_bytes = await asyncio.to_thread(process_tts, message_to_send)
@@ -609,12 +522,12 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
                 print(f"⚠️ Actor/TTS Error: {e}")
                 if not message_to_send: should_speak = False
 
-        client_states[client_id] = {
+        state.update({
             "summary": summary if summary else last_summary,
             "stored_images": next_stored_images,
             "cooldown": cooldown,
             "last_spoken": message_to_send if should_speak and message_to_send else last_spoken
-        }
+        })
 
         _cleanup_temp_images(images_to_delete)
 
@@ -635,12 +548,111 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         traceback.print_exc()
         _cleanup_temp_images([current_image_path])
 
+    finally:
+        # 🔓 모든 작업 종료 후 락 해제 (다음 프레임 대기)
+        if client_id in client_states:
+            client_states[client_id]["is_processing"] = False
+
+
+async def handle_notification(websocket: WebSocket, client_id: str, data: dict):
+    app_name = data.get("app_name", "System")
+    content = data.get("content", "")
+    image_id = data.get("image_id")
+
+    if not content and not image_id:
+        return
+
+    # 이미지가 넘어왔을 경우 경로 확인
+    valid_paths = []
+    if image_id:
+        img_path = os.path.join(TEMP_IMAGE_PATH, image_id)
+        if os.path.exists(img_path):
+            valid_paths.append(img_path)
+
+    # 1. 루시아 페르소나 및 알림 상황 프롬프트 설정
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(recent_conversation="", userEmotion="", now=now_str)
+
+    prompt = (
+        f"{lucia_persona}\n"
+        "--------------------------------------------------\n"
+        "!!! 시스템 지침: 알림에 대한 응답!!!\n"
+        f"App Name: {app_name}\n"
+        f"Content Summary / Image Context: {content}\n"
+        "--------------------------------------------------\n"
+        "작업: 방금 화면에서 시스템 알림 또는 메시지를 받았습니다.\n"
+        "캐릭터 컨셉을 반드시 맞춰서 행동하고 알림과 관련된 말을 하세요. 짧게 하세요\n"
+        "JSON을 출력하지 말고 자연스럽게 말하세요."
+    )
+
+    def process_notification():
+        # LLM 호출
+        llm_out = generate_llm_response(
+            user_input=prompt,
+            recent_conversation=[],
+            inputType=InputTypeValue.NOTIFICATION,  # 🔥 [여기!] CHAT 대신 NOTIFICATION 으로 수정
+            emotion="Neutral",
+            image_paths=valid_paths
+        )
+
+        # 앞뒤 따옴표 및 Lucia: 같은 태그 제거
+        message = llm_out.replace('"', '').replace("Lucia:", "").strip()
+
+        # TTS 변환 및 감정 추출
+        tts_text = re.sub(r'[^\u0000-\uFFFF]', '', message)
+        emo_out = analyze_emotion(message)
+
+        wav_bytes = None
+        if server_config.TTS.TTS_ENABLE and message:
+            wav_bytes = text_to_speech(tts_text, emo_out)
+
+        return message, emo_out, wav_bytes
+
+    try:
+        # 비동기 스레드에서 처리
+        message, emo_out, wav_bytes = await asyncio.to_thread(process_notification)
+
+        audio_filename = None
+        audio_url = None
+
+        if wav_bytes is not None:
+            fname = f"{uuid.uuid4()}.wav"
+            with open(os.path.join(AUDIO_SAVE_PATH, fname), "wb") as f:
+                f.write(wav_bytes)
+
+            host = websocket.url.hostname or "localhost"
+            if host == "0.0.0.0": host = "localhost"
+
+            audio_filename = fname
+            audio_url = f"http://{host}:{FILE_SERVER_PORT}/{fname}"
+
+        # 2. 클라이언트로 결과 전송 (observe_result와 동일한 포맷을 보장하기 위해 should_speak 등 포함)
+        await websocket.send_json({
+            "op": "notification_result",
+            "should_speak": True if message else False,
+            "llm_response": message,
+            "reason": f"[{app_name}] 알림 감지 반응",
+            "emotion": emo_out,
+            "audio_filename": audio_filename,
+            "audio_url": audio_url
+        })
+        print(f"🔔 Notification[{client_id}] App: {app_name} -> Msg: {message}")
+
+    except Exception as e:
+        print(f"⚠️ Notification Handling Failed: {e}")
+    finally:
+        # 사용 완료된 임시 이미지 삭제
+        _cleanup_temp_images(valid_paths)
+
 
 async def handle_chat(websocket: WebSocket, data: dict):
     text = data.get("text", "")
     is_emotion = bool(data.get("emotion"))
     img_ids = data.get("image_ids") or []
     if data.get("image_id"): img_ids.append(data.get("image_id"))
+
+    # 🟢 [추가] 클라이언트에서 'think' 값을 받아옵니다. (안 보내면 기본값 False로 초고속 모드)
+    use_think = bool(data.get("think", False))
 
     user_info = {
         "name": data.get("user_name"),
@@ -666,7 +678,8 @@ async def handle_chat(websocket: WebSocket, data: dict):
             inputType=InputTypeValue.CHAT,
             emotion="Neutral" if is_emotion else "",
             image_paths=valid_paths,
-            user_info=user_info
+            user_info=user_info,
+            use_think=use_think  # 🟢 [추가] 추출한 값을 핸들러로 넘김
         )
         tts_text = re.sub(r'[^\u0000-\uFFFF]', '', llm_out)
         emo_out = analyze_emotion(llm_out)
@@ -695,7 +708,6 @@ async def handle_chat(websocket: WebSocket, data: dict):
             audio_filename = fname
             audio_url = f"http://{host}:{FILE_SERVER_PORT}/{fname}"
 
-        # 🚀 클라이언트가 이미 끊겼을 경우 발생하는 에러를 캡처
         try:
             await websocket.send_json({
                 "op": "chat_result",
@@ -726,13 +738,12 @@ async def handle_feedback(websocket: WebSocket, data: dict):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# WebSocket Endpoint (메인 진입점)
+# WebSocket Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     print("⏳ Waiting for internal services to be ready before accepting WS...")
-    # 연결 수락 전 내부 서비스 상태 확인 (최대 60초 대기)
     is_ready = await wait_for_services(timeout=60)
 
     if not is_ready:
@@ -772,6 +783,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if op == "observe":
                 await handle_observe(websocket, client_id, data)
+                continue
+
+            if op == "notification":
+                await handle_notification(websocket, client_id, data)
                 continue
 
             if op == "chat":

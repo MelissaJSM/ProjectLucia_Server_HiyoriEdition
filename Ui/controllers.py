@@ -632,7 +632,7 @@ class SystemController:
         model_type = data.get("LLM_MODEL_TYPE", "gemma") # 기본값 gemma
         if model_type == "gemma":
             if hasattr(self.w, "GemmaRadioButton"): self.w.GemmaRadioButton.setChecked(True)
-        elif model_type == "phi":
+        elif model_type == "gemma4":
             if hasattr(self.w, "Gemma4RadioButton"): self.w.Gemma4RadioButton.setChecked(True)
 
     def _apply_gpu_config(self, data, saved_gpus, is_valid):
@@ -808,7 +808,7 @@ class SystemController:
         # [NEW] 모델 타입 라디오 버튼 상태 저장
         model_type = "gemma"
         if hasattr(self.w, "Gemma4RadioButton") and self.w.Gemma4RadioButton.isChecked():
-            model_type = "phi"
+            model_type = "gemma4"
 
         # 데이터 구성
         data = {
