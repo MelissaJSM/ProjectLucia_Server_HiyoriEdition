@@ -80,10 +80,6 @@ cd ProjectLucia_Server_HiyoriEdition
 ### 4. 데이터베이스 설정
 MySQL을 설치 한 후 DB.SQL 파일을 임포트하여 구성합니다.
 
-### 0. Docker 환경 설치
-[(Finetuning)](https://github.com/MelissaJSM/ProjectLucia_Finetuning.git) 의 링크에서 Docker 설치환경을 그대로 따라하시면 됩니다. 
-서버와 파인튜닝 Docker 환경을 공유합니다.
-
 ---
 
 ## 🚀 사용 방법
