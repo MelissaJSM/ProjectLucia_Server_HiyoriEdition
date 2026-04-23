@@ -63,26 +63,14 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 *   **Database**: MySQL Server 설치 및 실행 필요
 
 ### 2. 클론 및 패키지 설치
+
+# 가상 환경 생성 (아나콘다 혹은 직접)
+[(설치 환경 가이드)](https://github.com/MelissaJSM/ProjectLucia_Finetuning_Server#%EF%B8%8F-project-lucia-server-guide) 를 따라하시면 환경 생성이 가능합니다.
+
+# 깃 클론
 ```bash
 git clone https://github.com/MelissaJSM/ProjectLucia_Server_HiyoriEdition.git
 cd ProjectLucia_Server_HiyoriEdition
-
-#가상 환경 생성 (아나콘다 혹은 직접)
-
-# 의존성 설치
-pip install uv
-
-uv pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
-
-uv pip install notebook ipywidgets hf_xet wordsegment python-multipart PyQt5 pytz flask ddgs nvidia-ml-py trafilatura mysql-connector-python fastapi transformers soundfile "uvicorn[standard]" ffmpeg-python librosa pytorch_lightning matplotlib x_transformers peft jieba fast_langdetect g2p_en split_lang cn2an pypinyin jieba_fast pyopenjtalk jamo ko_pron g2pk2 python-mecab-ko onnxruntime-gpu opencc mcp noapi-google-search-mcp
-
-windows 의 경우
-uv pip install https://github.com/kingbri1/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu128torch2.8.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
-uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.23/exllamav3-0.0.23+cu128.torch2.8.0-cp310-cp310-win_amd64.whl
-
-linux 의 경우
-uv pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl
-uv pip install https://github.com/turboderp-org/exllamav3/releases/download/v0.0.23/exllamav3-0.0.23+cu128.torch2.8.0-cp310-cp310-linux_x86_64.whl
 ```
 
 ### 3. 추가 라이브러리 설치
