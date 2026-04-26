@@ -57,6 +57,7 @@ CREATE TABLE `serverSettings` (
   `id` int(11) NOT NULL,
   `commu_log_interval` int(11) DEFAULT 10,
   `commu_log_time` tinyint(1) DEFAULT 0,
+  `character_name` text DEFAULT NULL,
   `character_concept` text DEFAULT NULL,
   `command_feedback` text DEFAULT NULL,
   `command_search` text DEFAULT NULL,
