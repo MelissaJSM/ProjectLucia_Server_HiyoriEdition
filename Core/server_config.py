@@ -16,6 +16,7 @@ DOWNLOAD_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "Models")
 )
 
+
 class PORTS:
     """서버 포트 및 호스트 설정"""
     LLAMA_HOST = "127.0.0.1"
@@ -26,18 +27,19 @@ class PORTS:
     AUDIO_SERVER_PORT = 3546
     MAIN_SERVER_PORT = 3545
 
+
 class LLM:
     """LLM (Large Language Model) 관련 설정"""
-    LOCATION: str = ""          # 모델 폴더 경로
-    LOCATION_MODEL: str = ""    # 모델 파일/폴더명
-    MODEL_TYPE: str = "gemma"   # 모델 타입 (gemma, gemma4 등)
-    
+    LOCATION: str = ""  # 모델 폴더 경로
+    LOCATION_MODEL: str = ""  # 모델 파일/폴더명
+    MODEL_TYPE: str = "gemma"  # 모델 타입 (gemma, gemma4 등)
+
     # 모델 로드 옵션
-    CACHE_QUANT = ""            # 캐시 양자화 (4bit, 8bit 등)
-    TENSOR_PARALLEL = False     # 텐서 병렬화 사용 여부
-    GPU_INDEX = "0"             # 사용할 GPU 인덱스 (콤마로 구분)
-    GPU_SPLIT = ""              # GPU 메모리 분할 설정
-    
+    CACHE_QUANT = ""  # 캐시 양자화 (4bit, 8bit 등)
+    TENSOR_PARALLEL = False  # 텐서 병렬화 사용 여부
+    GPU_INDEX = "0"  # 사용할 GPU 인덱스 (콤마로 구분)
+    GPU_SPLIT = ""  # GPU 메모리 분할 설정
+
     # 생성 파라미터 (Generation Config)
     TEMPERATURE = "0.8"
     TOP_K = "40"
@@ -46,47 +48,51 @@ class LLM:
     REPETITION_PENALTY = "1.05"
     PRESENCE_PENALTY = "0.0"
     FREQUENCY_PENALTY = "0.0"
-    
+
     # 시스템 리소스
-    CPU_THREADS = 1             # CPU 스레드 수
-    CONTEXT = 1024              # 컨텍스트 길이 (cache_size)
+    CPU_THREADS = 1  # CPU 스레드 수
+    CONTEXT = 1024  # 컨텍스트 길이 (cache_size)
 
     # 프롬프트 템플릿 (DB 또는 config.json에서 로드)
     LLM_CHAT_FORMAT: str = ""
     LLM_RAG_SEARCH_FORMAT: str = ""
     LLM_FEEDBACK_FORMAT: str = ""
-    
+    LLM_CHARACTER_NAME: str = ""
+    LLM_USER_NAME: str = ""
+
     # 대화 로그 설정
-    COMMU_LOG_TIME = False      # 대화 로그 시간 기록 여부
-    COMMU_LOG_INTERVAL = 10     # 대화 로그 저장 간격
+    COMMU_LOG_TIME = False  # 대화 로그 시간 기록 여부
+    COMMU_LOG_INTERVAL = 10  # 대화 로그 저장 간격
+
 
 class TTS:
     """TTS (Text-to-Speech) 관련 설정 (GPT-SoVITS)"""
-    LOCATION_GPT : str = ""     # GPT 모델 경로
-    GPT_NAME : str = ""         # GPT 모델명
-    LOCATION_CKPT : str = ""    # SoVITS 체크포인트 경로
-    CKPT_NAME : str = ""        # SoVITS 체크포인트명
-    
+    LOCATION_GPT: str = ""  # GPT 모델 경로
+    GPT_NAME: str = ""  # GPT 모델명
+    LOCATION_CKPT: str = ""  # SoVITS 체크포인트 경로
+    CKPT_NAME: str = ""  # SoVITS 체크포인트명
+
     # 추론 옵션
-    TEXT_SPLIT_METHOD : str = "cut5"
-    BATCH_SIZE : int = 1
-    PARALLEL_INFER : bool = True
-    SPLIT_BUCKET : bool = True
-    SEED : int = -1
-    TOP_K : float = 64
-    TOP_P : float = 0.95
-    TEMPERATURE : float = 1.0
-    REPETITION_PENALTY : float = 1.35
-    SPEED_FACTOR : float = 1.0
-    TTS_LANGUAGE : str = "auto"
-    GPU_TTS = 0                 # TTS 전용 GPU 인덱스
-    TTS_ENABLE : bool = False   # TTS 활성화 여부
+    TEXT_SPLIT_METHOD: str = "cut5"
+    BATCH_SIZE: int = 1
+    PARALLEL_INFER: bool = True
+    SPLIT_BUCKET: bool = True
+    SEED: int = -1
+    TOP_K: float = 64
+    TOP_P: float = 0.95
+    TEMPERATURE: float = 1.0
+    REPETITION_PENALTY: float = 1.35
+    SPEED_FACTOR: float = 1.0
+    TTS_LANGUAGE: str = "auto"
+    GPU_TTS = 0  # TTS 전용 GPU 인덱스
+    TTS_ENABLE: bool = False  # TTS 활성화 여부
 
 
 class EMOTION:
     """감정 분석 모델 설정"""
-    LOCATION_EMOTION : str = ""
-    EMOTION_NAME : str = ""
+    LOCATION_EMOTION: str = ""
+    EMOTION_NAME: str = ""
+
 
 class SQL:
     """MySQL 데이터베이스 연결 설정"""
@@ -99,7 +105,7 @@ class SQL:
 
 def _apply(data: dict):
     """딕셔너리 데이터를 각 설정 클래스에 적용합니다."""
-    
+
     # PORTS
     PORTS.LLAMA_HOST = data.get("LLAMA_HOST", "127.0.0.1")
     PORTS.LLAMA_PORT = int(data.get("LLAMA_PORT", 8000))
@@ -118,7 +124,7 @@ def _apply(data: dict):
     LLM.TENSOR_PARALLEL = data.get("TENSOR_PARALLEL", False)
     LLM.GPU_INDEX = data.get("GPU_INDEX", "0")
     LLM.GPU_SPLIT = data.get("GPU_SPLIT", "")
-    
+
     LLM.TEMPERATURE = data.get("LLM_TEMPERATURE", "0.8")
     LLM.TOP_K = data.get("LLM_TOP_K", "40")
     LLM.TOP_P = data.get("LLM_TOP_P", "0.9")
@@ -126,14 +132,15 @@ def _apply(data: dict):
     LLM.REPETITION_PENALTY = data.get("LLM_REPETITION_PENALTY", "1.05")
     LLM.PRESENCE_PENALTY = data.get("LLM_PRESENCE_PENALTY", "0.0")
     LLM.FREQUENCY_PENALTY = data.get("LLM_FREQUENCY_PENALTY", "0.0")
-    
+
     LLM.CPU_THREADS = int(data.get("CPU_THREADS", 1))
     LLM.CONTEXT = data.get("CONTEXT", 1024)
 
+    LLM.LLM_CHARACTER_NAME = data.get("CHARACTER_NAME", "")
     LLM.LLM_CHAT_FORMAT = data.get("CHARACTER_CONCEPT", "")
     LLM.LLM_FEEDBACK_FORMAT = data.get("COMMAND_FEEDBACK", "")
     LLM.LLM_RAG_SEARCH_FORMAT = data.get("COMMAND_SEARCH", "")
-    
+
     LLM.COMMU_LOG_TIME = data.get("COMMU_LOG_TIME", False)
     LLM.COMMU_LOG_INTERVAL = int(data.get("COMMU_LOG_INTERVAL", 10))
 
@@ -171,10 +178,10 @@ def _apply(data: dict):
 def reload(path: str | None = None):
     """
     설정 파일을 다시 로드하여 전역 설정에 반영합니다.
-    
+
     Args:
         path (str, optional): 설정 파일 경로. 지정하지 않으면 기본 경로 사용.
-        
+
     Returns:
         bool: 로드 성공 여부
     """

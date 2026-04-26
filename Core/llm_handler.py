@@ -11,7 +11,6 @@ from contextlib import ExitStack
 from enum import IntEnum
 import pytz
 
-# 🟢 Gemma4 전용 도구 호출 함수 제거됨
 from Core.rag_search import preprocess_webrag
 from Core.sql import MySQLManager
 from transformers import AutoTokenizer
@@ -82,23 +81,36 @@ def _build_chat_messages(user_input, history_log, emotion, model_type, user_info
     if rag_context and "검색 결과가 없습니다" not in rag_context:
         rag_prompt = (
             f"\n\n[참고 정보 (네트워크 검색 결과)]\n{rag_context}\n"
-            "※ 위 검색 결과를 바탕으로 자연스럽게 대답해. 모르는 내용이면 '검색해 봤는데 그런 건 안 보이는데요?'라고 말해.\n"
+            "※ 위 검색 결과를 바탕으로 자연스럽게 대답해. 모르는 내용이면, 검색 결과가 없으면 '검색해 봤는데 그런 건 안 보이는데요?'라고 말해.\n"
         )
         print(f"🔍 RAG 정보 추가됨: {len(rag_context)} chars")
 
-    emotion_prompt = f" 현재 대화하는 사람의 감정 상태는 {emotion} 입니다. 이를 고려하여 반응하세요." if emotion else ""
+    if emotion and emotion.strip():
+        emotion_prompt = f" 현재 대화하는 사람의 감정 상태는 {emotion} 입니다. 이를 고려하여 반응하세요."
+    else:
+        emotion_prompt = ""
+
+    time_prompt = f"현재 시간은 {now} 입니다. 시간 정보가 필요하면 이 시간을 참고해서 대화 하십시오."
 
     user_info_str = ""
     if user_info:
-        parts = []
-        if user_info.get("name"): parts.append(f"Name: {user_info['name']}")
-        if user_info.get("gender"): parts.append(f"Gender: {user_info['gender']}")
-        if user_info.get("birth_date"): parts.append(f"Birthday: {user_info['birth_date']}")
-        if parts: user_info_str = f"[현재 대화 중인 사용자 정보] {', '.join(parts)}\n"
+        # 각 정보가 없을 경우를 대비해 기본값(Default)을 설정해두면 더 안전해요!
+        user_name = user_info.get("name", server_config.LLM.LLM_USER_NAME)
+        user_gender = "남성" if user_info.get("gender") == "Man" else "여성"
+        user_birthday = user_info.get("birth_date", "비공개")
 
-    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(recent_conversation=history_log,
-                                                                   userEmotion=emotion_prompt, now=now)
-    final_system_content = f"{user_info_str}{base_system_content}{rag_prompt}"
+        # 루시아의 시스템 프롬프트에 들어갈 서사적인 문구로 구성
+        user_info_str = f"""
+    ### [대화 하고있는 상대방  {server_config.LLM.LLM_USER_NAME}님에 대한 인적 정보 (상대방이 누군지 반드시 인지해주세요!)]
+    - **성함(혹은 닉네임):** {user_name}
+    - **성별:** {user_gender}
+    - **생년월일:** {user_birthday}
+    \n\n"""
+
+    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
+                                                                   characterName=server_config.LLM.LLM_CHARACTER_NAME)
+
+    final_system_content = f"{base_system_content}{user_info_str}{time_prompt}{emotion_prompt}{rag_prompt}\n\n{history_log}"
 
     if "gemma" in model_type: final_system_content += "\n\n대화시작:"
 
@@ -147,16 +159,22 @@ def _build_notification_messages(user_input, emotion, model_type, user_info=None
 
     user_info_str = ""
     if user_info:
-        parts = []
-        if user_info.get("name"): parts.append(f"Name: {user_info['name']}")
-        if parts: user_info_str = f"[현재 대화 중인 사용자 정보] {', '.join(parts)}\n"
+        # 각 정보가 없을 경우를 대비해 기본값(Default)을 설정해두면 더 안전해요!
+        user_name = user_info.get("name", server_config.LLM.LLM_USER_NAME)
+        user_gender = "남성" if user_info.get("gender") == "Man" else "여성"
+        user_birthday = user_info.get("birth_date", "비공개")
+
+        # 루시아의 시스템 프롬프트에 들어갈 서사적인 문구로 구성
+        user_info_str = f"""
+    ### [대화 하고있는 상대방  {server_config.LLM.LLM_USER_NAME}님에 대한 인적 정보 (상대방이 누군지 반드시 인지해주세요!)]
+    - **성함(혹은 닉네임):** {user_name}
+    - **성별:** {user_gender}
+    - **생년월일:** {user_birthday}
+    \n\n"""
 
     # RAG 검색 결과를 넣지 않고 페르소나만 깔끔하게 넣습니다.
-    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(
-        recent_conversation="",
-        userEmotion="",
-        now=now
-    )
+    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
+                                                                   characterName=server_config.LLM.LLM_CHARACTER_NAME)
     final_system_content = f"{user_info_str}{base_system_content}"
 
     if "gemma" in model_type: final_system_content += "\n\n대화시작:"
@@ -260,6 +278,7 @@ def generate_llm_response(user_input, recent_conversation, inputType, emotion, i
         messages = _build_chat_messages(user_input, recent_conversation, emotion, model_type, user_info,
                                         has_image=has_image)
         print("💬 일반 대화 처리 (Legacy RAG 결합)")
+        print(messages)
         return _execute_llm_request(messages, model_type, image_paths, use_think=use_think)
 
     # 🔵 [3] 피드백 모드

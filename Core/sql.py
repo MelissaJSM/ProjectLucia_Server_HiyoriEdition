@@ -12,13 +12,13 @@ import Core.server_config as server_config
 
 def _load_mysql_config():
     """
- MySQL 연결 설정을 로드합니다.
+    MySQL 연결 설정을 로드합니다.
 
- 우선순위:
-   1) 환경변수 MYSQL_* (최우선)
-   2) config.json (server_config.DEFAULT_CFG 경로)
-   3) Core.server_config.SQL (최종 fallback)
- """
+    우선순위:
+      1) 환경변수 MYSQL_* (최우선)
+      2) config.json (server_config.DEFAULT_CFG 경로)
+      3) Core.server_config.SQL (최종 fallback)
+    """
     # 1) 환경변수 확인
     cfg_env = {
         "host": os.getenv("MYSQL_HOST"),
@@ -74,11 +74,11 @@ class MySQLManager:
 
     def connect(self) -> bool:
         """
-  MySQL 데이터베이스에 연결합니다.
+        MySQL 데이터베이스에 연결합니다.
 
-  Returns:
-      bool: 연결 성공 여부
-  """
+        Returns:
+            bool: 연결 성공 여부
+        """
         try:
             # 환경변수가 있으면 우선 사용, 없으면 self.cfg 사용
             self.connection = mysql.connector.connect(
@@ -106,9 +106,9 @@ class MySQLManager:
 
     def _cursor(self, dictionary=True):
         """
-  안전하게 커서를 생성하여 반환합니다.
-  연결이 끊겨있으면 재연결을 시도합니다.
-  """
+        안전하게 커서를 생성하여 반환합니다.
+        연결이 끊겨있으면 재연결을 시도합니다.
+        """
         if not self.connection or not self.connection.is_connected():
             if not self.connect():
                 return None
@@ -124,11 +124,16 @@ class MySQLManager:
 
     def fetch_recent_logs(self):
         """
-  최근 대화 기록을 조회합니다.
-  server_config의 COMMU_LOG_INTERVAL(개수)과 COMMU_LOG_TIME(시간 표시 여부)을 따릅니다.
-  """
+        최근 대화 기록을 조회합니다.
+        server_config의 COMMU_LOG_INTERVAL(개수)과 COMMU_LOG_TIME(시간 표시 여부)을 따릅니다.
+        """
         cur = self._cursor(dictionary=True)
         if cur is None:
+            return ""
+
+        # ✨ 수정됨: 1. 설정값이 0 이하일 경우 쿼리 실행 없이 즉시 빈 문자열 반환
+        if getattr(server_config.LLM, "COMMU_LOG_INTERVAL", 0) <= 0:
+            self.close()
             return ""
 
         try:
@@ -137,21 +142,30 @@ class MySQLManager:
                     FROM logs \
                     ORDER BY userTime DESC \
                         LIMIT %s \
-           """
+                    """
             cur.execute(query, (server_config.LLM.COMMU_LOG_INTERVAL,))
             logs = cur.fetchall()
             cur.close()
 
+            # ✨ 수정됨: 2. 가져온 데이터가 비어있을 경우에도 헤더/푸터 없이 빈 문자열 반환
+            if not logs:
+                self.close()
+                return ""
+
             conversation_log = []
-            conversation_log.append("다음은 멜리사와 루시아 당신의 이전 대화 기록입니다. 이를 참고하여 맥락을 유지하고 자연스러운 대화를 이어가세요\n <이전 대화 기록 시작|>")
+            conversation_log.append(
+                f"다음은 {server_config.LLM.LLM_USER_NAME}와 {server_config.LLM.LLM_CHARACTER_NAME} 당신의 이전 대화 기록입니다. 이를 참고하여 맥락을 유지하고 자연스러운 대화를 이어가세요\n <이전 대화 기록 시작|>")
 
             for log in reversed(logs):
                 if server_config.LLM.COMMU_LOG_TIME:
-                    conversation_log.append(f"[질문 시간 : {log['userTime']}] 멜리사 : {log['user']}")
-                    conversation_log.append(f"[대답 시간 : {log['assistantTime']}] 루시아 : {log['assistant']}\n")
+                    # 보너스 수정: [ ] 괄호가 한쪽만 있던 것을 양쪽으로 깔끔하게 맞췄습니다.
+                    conversation_log.append(f"[{log['userTime']}] {server_config.LLM.LLM_USER_NAME} : {log['user']}")
+                    conversation_log.append(
+                        f"[{log['assistantTime']}] {server_config.LLM.LLM_CHARACTER_NAME} : {log['assistant']}\n")
                 else:
-                    conversation_log.append(f"멜리사 : {log['user']}")
-                    conversation_log.append(f"루시아 : {log['assistant']}\n")
+                    conversation_log.append(f"{server_config.LLM.LLM_USER_NAME} : {log['user']}")
+                    conversation_log.append(f"{server_config.LLM.LLM_CHARACTER_NAME} : {log['assistant']}\n")
+
             conversation_log.append("<이전 대화 기록 끝|>")
             self.close()
             return "\n".join(conversation_log)
@@ -171,7 +185,7 @@ class MySQLManager:
                         SELECT user, userTime, assistant, assistantTime
                         FROM logs
                         WHERE id = %s
-               """, (number,))
+                        """, (number,))
             feedback = cur.fetchone()
             cur.close()
             self.close()
@@ -207,7 +221,8 @@ class MySQLManager:
             return None
 
         try:
-            cur.execute("SELECT character_concept, command_feedback, command_search FROM serverSettings LIMIT 1;")
+            cur.execute(
+                "SELECT character_concept, command_feedback, command_search , character_name FROM serverSettings LIMIT 1;")
             result = cur.fetchone()
             cur.close()
             self.close()
@@ -243,7 +258,7 @@ class MySQLManager:
                            llm_presence_penalty, \
                            llm_frequency_penalty \
                     FROM serverSettings LIMIT 1; \
-           """
+                    """
             cur.execute(query)
             result = cur.fetchone()
             cur.close()
@@ -277,7 +292,7 @@ class MySQLManager:
                            tts_speed_factor, \
                            tts_language \
                     FROM serverSettings LIMIT 1; \
-           """
+                    """
             cur.execute(query)
             result = cur.fetchone()
             cur.close()
@@ -302,18 +317,19 @@ class MySQLManager:
                 sql = """ \
                       INSERT INTO serverSettings \
                       (id, commu_log_time, commu_log_interval, character_concept, command_feedback, command_search, \
+                       character_name, \
                        context_length, gpu_tts, tts_enable, cpu_threads, \
                        llm_model_type, llm_cache_quant, llm_tensor_parallel, llm_gpu_index, llm_gpu_split, \
                        llm_temperature, llm_top_k, llm_top_p, llm_min_p, llm_repetition_penalty, llm_presence_penalty, \
                        llm_frequency_penalty, \
                        tts_text_split_method, tts_batch_size, tts_parallel_infer, tts_split_bucket, tts_seed, \
                        tts_top_k, tts_top_p, tts_temperature, tts_repetition_penalty, tts_speed_factor, tts_language) \
-                      VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
+                      VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
                               %s, %s, %s, %s, %s, \
                               %s, %s, %s, %s, %s, %s, %s, \
                               %s, %s, %s, %s, %s, \
                               %s, %s, %s, %s, %s, %s); \
-          """
+                      """
                 values = (
                     1 if server_config.LLM.COMMU_LOG_TIME else 0,
                     server_config.LLM.COMMU_LOG_INTERVAL,
@@ -377,8 +393,8 @@ class MySQLManager:
 
     def _fix_schema(self):
         """
-  DB 스키마를 보정합니다. (컬럼 추가, 타입 변경 등)
-  """
+        DB 스키마를 보정합니다. (컬럼 추가, 타입 변경 등)
+        """
         cur = self._cursor(dictionary=False)
         if cur is None: return
         try:
@@ -406,8 +422,8 @@ class MySQLManager:
 
     def save_command(self):
         """
-  현재 server_config의 모든 설정을 serverSettings 테이블에 저장(UPSERT)합니다.
-  """
+        현재 server_config의 모든 설정을 serverSettings 테이블에 저장(UPSERT)합니다.
+        """
         cur = self._cursor(dictionary=False)
         if cur is None:
             print("❌ MySQL 연결 실패로 설정 저장 불가")
@@ -415,14 +431,15 @@ class MySQLManager:
 
         sql = """ \
               INSERT INTO serverSettings \
-              (id, commu_log_time, commu_log_interval, character_concept, command_feedback, command_search, \
+              (id, commu_log_time, commu_log_interval, character_concept, character_name, command_feedback, \
+               command_search, \
                context_length, gpu_tts, tts_enable, cpu_threads, \
                llm_model_type, llm_cache_quant, llm_tensor_parallel, llm_gpu_index, llm_gpu_split, \
                llm_temperature, llm_top_k, llm_top_p, llm_min_p, llm_repetition_penalty, llm_presence_penalty, \
                llm_frequency_penalty, \
                tts_text_split_method, tts_batch_size, tts_parallel_infer, tts_split_bucket, tts_seed, \
                tts_top_k, tts_top_p, tts_temperature, tts_repetition_penalty, tts_speed_factor, tts_language) \
-              VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
+              VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
                       %s, %s, %s, %s, %s, \
                       %s, %s, %s, %s, %s, %s, %s, \
                       %s, %s, %s, %s, %s, \
@@ -431,7 +448,8 @@ class MySQLManager:
                   commu_log_time = \
               VALUES (commu_log_time), commu_log_interval = \
               VALUES (commu_log_interval), character_concept = \
-              VALUES (character_concept), command_feedback = \
+              VALUES (character_concept), character_name = \
+              VALUES (character_name), command_feedback = \
               VALUES (command_feedback), command_search = \
               VALUES (command_search), context_length = \
               VALUES (context_length), gpu_tts = \
@@ -461,11 +479,12 @@ class MySQLManager:
               VALUES (tts_repetition_penalty), tts_speed_factor = \
               VALUES (tts_speed_factor), tts_language = \
               VALUES (tts_language); \
-        """
+              """
         values = (
             1 if server_config.LLM.COMMU_LOG_TIME else 0,
             server_config.LLM.COMMU_LOG_INTERVAL,
             server_config.LLM.LLM_CHAT_FORMAT,
+            server_config.LLM.LLM_CHARACTER_NAME,
             server_config.LLM.LLM_FEEDBACK_FORMAT,
             server_config.LLM.LLM_RAG_SEARCH_FORMAT,
             server_config.LLM.CONTEXT,

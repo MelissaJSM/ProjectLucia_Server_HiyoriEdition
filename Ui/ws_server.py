@@ -460,8 +460,8 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         # 2단계: 루시아 대사 생성
         if should_speak:
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(recent_conversation="", userEmotion="",
-                                                                     now=now_str)
+            lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
+                                                                     characterName=server_config.LLM.LLM_CHARACTER_NAME)
 
             actor_prompt = (
                 f"{lucia_persona}\n"
@@ -571,7 +571,8 @@ async def handle_notification(websocket: WebSocket, client_id: str, data: dict):
 
     # 1. 루시아 페르소나 및 알림 상황 프롬프트 설정
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(recent_conversation="", userEmotion="", now=now_str)
+    lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
+                                                             characterName=server_config.LLM.LLM_CHARACTER_NAME)
 
     prompt = (
         f"{lucia_persona}\n"
@@ -659,6 +660,8 @@ async def handle_chat(websocket: WebSocket, data: dict):
         "gender": data.get("user_gender"),
         "birth_date": data.get("user_birth_date")
     }
+
+    server_config.LLM.LLM_USER_NAME = user_info["name"]
 
     if not text and not img_ids: return
 
