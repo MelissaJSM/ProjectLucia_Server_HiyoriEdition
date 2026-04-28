@@ -1,7 +1,5 @@
 -- MySQL dump 10.13  Distrib 8.0.41, for Win64 (x86_64)
---
 -- Host: 192.168.35.97    Database: myLucia
--- ------------------------------------------------------
 -- Server version	5.5.5-10.11.14-MariaDB-0+deb12u2
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -34,17 +32,8 @@ CREATE TABLE `logs` (
   `feedbackData` text DEFAULT NULL,
   `feedbackHint` text DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=264 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `logs`
---
-
-LOCK TABLES `logs` WRITE;
-/*!40000 ALTER TABLE `logs` DISABLE KEYS */;
-/*!40000 ALTER TABLE `logs` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `serverSettings`
@@ -73,7 +62,7 @@ CREATE TABLE `serverSettings` (
   `llm_top_p` float DEFAULT 1,
   `llm_min_p` float DEFAULT 0,
   `llm_repetition_penalty` float DEFAULT 1,
-  `llm_presence_penalty` float DEFAULT 0,
+  `llm_presence_penalty" float DEFAULT 0,
   `llm_frequency_penalty` float DEFAULT 0,
   `tts_enable` tinyint(1) DEFAULT 1,
   `tts_text_split_method` varchar(20) DEFAULT NULL,
@@ -91,16 +80,13 @@ CREATE TABLE `serverSettings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
--- Dumping data for table `serverSettings`
---
-
 LOCK TABLES `serverSettings` WRITE;
 /*!40000 ALTER TABLE `serverSettings` DISABLE KEYS */;
+INSERT INTO `serverSettings` (`id`, `commu_log_interval`, `context_length`) VALUES (1, 10, 2048);
 /*!40000 ALTER TABLE `serverSettings` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
@@ -108,5 +94,3 @@ UNLOCK TABLES;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-
--- Dump completed on 2026-01-29 11:27:59
