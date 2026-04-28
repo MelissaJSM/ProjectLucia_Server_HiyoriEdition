@@ -64,7 +64,6 @@ CREATE TABLE `serverSettings` (
   `context_length` int(11) DEFAULT 2048,
   `gpu_tts` int(11) DEFAULT 0,
   `cpu_threads` int(11) DEFAULT 4,
-  `llm_model_type` varchar(50) DEFAULT NULL,
   `llm_cache_quant` varchar(20) DEFAULT NULL,
   `llm_tensor_parallel` tinyint(1) DEFAULT 0,
   `llm_gpu_index` varchar(255) DEFAULT '0',
