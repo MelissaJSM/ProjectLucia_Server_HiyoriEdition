@@ -45,7 +45,6 @@ DROP TABLE IF EXISTS `serverSettings`;
 CREATE TABLE `serverSettings` (
   `id` int(11) NOT NULL,
   `commu_log_interval` int(11) DEFAULT 10,
-  `commu_log_time` tinyint(1) DEFAULT 0,
   `character_name` text DEFAULT NULL,
   `character_concept` text DEFAULT NULL,
   `command_feedback` text DEFAULT NULL,
@@ -62,7 +61,7 @@ CREATE TABLE `serverSettings` (
   `llm_top_p` float DEFAULT 1,
   `llm_min_p` float DEFAULT 0,
   `llm_repetition_penalty` float DEFAULT 1,
-  `llm_presence_penalty" float DEFAULT 0,
+  `llm_presence_penalty` float DEFAULT 0,
   `llm_frequency_penalty` float DEFAULT 0,
   `tts_enable` tinyint(1) DEFAULT 1,
   `tts_text_split_method` varchar(20) DEFAULT NULL,
