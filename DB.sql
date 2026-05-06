@@ -1,7 +1,5 @@
 -- MySQL dump 10.13  Distrib 8.0.41, for Win64 (x86_64)
---
 -- Host: 192.168.35.97    Database: myLucia
--- ------------------------------------------------------
 -- Server version	5.5.5-10.11.14-MariaDB-0+deb12u2
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -34,17 +32,8 @@ CREATE TABLE `logs` (
   `feedbackData` text DEFAULT NULL,
   `feedbackHint` text DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=264 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `logs`
---
-
-LOCK TABLES `logs` WRITE;
-/*!40000 ALTER TABLE `logs` DISABLE KEYS */;
-/*!40000 ALTER TABLE `logs` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `serverSettings`
@@ -56,7 +45,6 @@ DROP TABLE IF EXISTS `serverSettings`;
 CREATE TABLE `serverSettings` (
   `id` int(11) NOT NULL,
   `commu_log_interval` int(11) DEFAULT 10,
-  `commu_log_time` tinyint(1) DEFAULT 0,
   `character_name` text DEFAULT NULL,
   `character_concept` text DEFAULT NULL,
   `command_feedback` text DEFAULT NULL,
@@ -64,7 +52,6 @@ CREATE TABLE `serverSettings` (
   `context_length` int(11) DEFAULT 2048,
   `gpu_tts` int(11) DEFAULT 0,
   `cpu_threads` int(11) DEFAULT 4,
-  `llm_model_type` varchar(50) DEFAULT NULL,
   `llm_cache_quant` varchar(20) DEFAULT NULL,
   `llm_tensor_parallel` tinyint(1) DEFAULT 0,
   `llm_gpu_index` varchar(255) DEFAULT '0',
@@ -92,16 +79,13 @@ CREATE TABLE `serverSettings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
--- Dumping data for table `serverSettings`
---
-
 LOCK TABLES `serverSettings` WRITE;
 /*!40000 ALTER TABLE `serverSettings` DISABLE KEYS */;
+INSERT INTO `serverSettings` (`id`, `commu_log_interval`, `context_length`) VALUES (1, 10, 2048);
 /*!40000 ALTER TABLE `serverSettings` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
@@ -109,5 +93,3 @@ UNLOCK TABLES;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-
--- Dump completed on 2026-01-29 11:27:59
