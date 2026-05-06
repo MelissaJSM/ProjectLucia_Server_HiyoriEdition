@@ -4,8 +4,8 @@
 # ──────────────────────────────────────────────────────────────────────────────
 import time
 import os
+import shutil  # 폴더 삭제를 위해 추가
 import requests
-from typing import Optional, Callable
 
 from PyQt5.QtCore import QTimer, QObject, QCoreApplication
 from huggingface_hub import HfApi, hf_hub_url
@@ -16,16 +16,12 @@ from Ui.utils import human_bytes, human_time
 class DownloadTask(QObject):
     def __init__(self, parent, save_dir: str,
                  key: str, repo_id: str,
-                 btn_start, btn_cancel, bar, lbl_percent, lbl_speed, lbl_eta, lbl_status,
-                 mirror_repo_id: Optional[str] = None,
-                 mirror_state_getter: Optional[Callable[[], bool]] = None):
+                 btn_start, btn_cancel, bar, lbl_percent, lbl_speed, lbl_eta, lbl_status):
         super().__init__(parent)
 
         self.parent = parent
         self.key = key
         self.repo_id = repo_id
-        self.mirror_repo_id = mirror_repo_id
-        self.mirror_state_getter = mirror_state_getter
 
         # 모델 종류에 따라 하위 폴더 자동 분류
         sub_folder = ""
@@ -86,23 +82,8 @@ class DownloadTask(QObject):
         self._is_running = True
         self._is_cancelled = False
 
-        # 미러(Uncensored) 사용 여부 확인
-        use_mirror = False
-        if callable(self.mirror_state_getter):
-            try:
-                use_mirror = bool(self.mirror_state_getter())
-            except:
-                pass
-
-        chosen_repo = self.mirror_repo_id if (use_mirror and self.mirror_repo_id) else self.repo_id
-
-        if use_mirror and not self.mirror_repo_id:
-            self.lbl_status.setText("상태: 실패 (미지원 모델)")
-            self._is_running = False
-            return
-
         # 허깅페이스 다운로드 실행
-        self.download_huggingface_repo(chosen_repo)
+        self.download_huggingface_repo(self.repo_id)
 
     def download_huggingface_repo(self, repo_id: str):
         """Hugging Face API를 통해 전체 폴더를 다운로드하고 UI에 반영합니다."""
@@ -169,8 +150,25 @@ class DownloadTask(QObject):
             self.bar.setValue(100)
 
         except InterruptedError:
+            # === [수정된 부분] 취소 시 폴더 삭제 로직 추가 ===
             self.timer.stop()
-            self.lbl_status.setText("상태: 취소됨")
+            self.lbl_status.setText("상태: 취소 중 (잔여 파일 삭제 중...)")
+            QCoreApplication.processEvents()
+            
+            try:
+                if os.path.exists(self.save_dir):
+                    shutil.rmtree(self.save_dir)  # 해당 모델 폴더 전체 삭제
+                self.lbl_status.setText("상태: 취소됨 및 잔여 파일 삭제 완료")
+            except Exception as e:
+                self.lbl_status.setText(f"상태: 취소됨 (삭제 실패: {e})")
+            
+            # UI 초기화
+            self.bar.setValue(0)
+            self.lbl_percent.setText("")
+            self.lbl_speed.setText("")
+            self.lbl_eta.setText("")
+            # ==================================================
+
         except Exception as e:
             self.timer.stop()
             self.lbl_status.setText(f"상태: 에러 ({type(e).__name__})")

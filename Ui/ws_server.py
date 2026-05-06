@@ -235,7 +235,6 @@ def init_server_settings():
     try:
         db = MySQLManager()
         settings = db.fetch_server_settings()
-        server_config.LLM.COMMU_LOG_TIME = bool(settings.get("commu_log_time", 0))
         server_config.LLM.COMMU_LOG_INTERVAL = int(settings.get("commu_log_interval", 10))
         db.close()
     except Exception:
@@ -256,21 +255,33 @@ async def lifespan(app: FastAPI):
         if is_ready:
             try:
                 def _run():
+                    # 1. 토크나이저 초기화 (llm_handler.py 쪽에 fix_mistral_regex=True 필요)
                     init_tokenizer()
+                    
+                    # 2. 감정 분석기 워밍업
                     try:
                         analyze_emotion("테스트")
                     except Exception:
                         pass
+                        
+                    # 3. LLM 서버 워밍업 (422 에러 픽스: JSON -> Form Data)
                     try:
-                        req_data = json.dumps(
-                            {"messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}).encode('utf-8')
-                        req = urllib.request.Request(
+                        import requests
+                        req_data = {
+                            "request_json": json.dumps({"messages": [{"role": "user", "content": "ping"}], "max_tokens": 1})
+                        }
+                        
+                        # 파일(images)은 보내지 않고 request_json 폼 필드만 전송
+                        requests.post(
                             f"http://{server_config.PORTS.LLAMA_HOST}:{server_config.PORTS.LLAMA_PORT}/v1/chat/completions",
-                            data=req_data, headers={'Content-Type': 'application/json'})
-                        with urllib.request.urlopen(req, timeout=30) as _:
-                            pass
-                    except Exception:
+                            data=req_data,
+                            timeout=30
+                        )
+                    except Exception as e:
+                        print(f"⚠️ LLM Warm-up Error: {e}")
                         pass
+                        
+                    # 4. TTS 서버 워밍업
                     if server_config.TTS.TTS_ENABLE:
                         try:
                             text_to_speech("아", "Neutral")
@@ -278,8 +289,10 @@ async def lifespan(app: FastAPI):
                             pass
 
                 await asyncio.to_thread(_run)
-            except Exception:
+            except Exception as e:
+                print(f"⚠️ Warm-up Failed: {e}")
                 pass
+                
         SERVER_IS_READY = True
 
     asyncio.create_task(do_warmup())
@@ -460,8 +473,7 @@ async def handle_observe(websocket: WebSocket, client_id: str, data: dict):
         # 2단계: 루시아 대사 생성
         if should_speak:
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
-                                                                     characterName=server_config.LLM.LLM_CHARACTER_NAME)
+            lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME, characterName=server_config.LLM.LLM_CHARACTER_NAME)
 
             actor_prompt = (
                 f"{lucia_persona}\n"
@@ -559,7 +571,7 @@ async def handle_notification(websocket: WebSocket, client_id: str, data: dict):
     content = data.get("content", "")
     image_id = data.get("image_id")
 
-    if not content and not image_id:
+    if not content and not image_id: 
         return
 
     # 이미지가 넘어왔을 경우 경로 확인
@@ -571,8 +583,7 @@ async def handle_notification(websocket: WebSocket, client_id: str, data: dict):
 
     # 1. 루시아 페르소나 및 알림 상황 프롬프트 설정
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
-                                                             characterName=server_config.LLM.LLM_CHARACTER_NAME)
+    lucia_persona = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME, characterName=server_config.LLM.LLM_CHARACTER_NAME)
 
     prompt = (
         f"{lucia_persona}\n"
@@ -591,11 +602,11 @@ async def handle_notification(websocket: WebSocket, client_id: str, data: dict):
         llm_out = generate_llm_response(
             user_input=prompt,
             recent_conversation=[],
-            inputType=InputTypeValue.NOTIFICATION,  # 🔥 [여기!] CHAT 대신 NOTIFICATION 으로 수정
+            inputType=InputTypeValue.NOTIFICATION, # 🔥 [여기!] CHAT 대신 NOTIFICATION 으로 수정
             emotion="Neutral",
             image_paths=valid_paths
         )
-
+        
         # 앞뒤 따옴표 및 Lucia: 같은 태그 제거
         message = llm_out.replace('"', '').replace("Lucia:", "").strip()
 
@@ -612,7 +623,7 @@ async def handle_notification(websocket: WebSocket, client_id: str, data: dict):
     try:
         # 비동기 스레드에서 처리
         message, emo_out, wav_bytes = await asyncio.to_thread(process_notification)
-
+        
         audio_filename = None
         audio_url = None
 
@@ -644,7 +655,6 @@ async def handle_notification(websocket: WebSocket, client_id: str, data: dict):
     finally:
         # 사용 완료된 임시 이미지 삭제
         _cleanup_temp_images(valid_paths)
-
 
 async def handle_chat(websocket: WebSocket, data: dict):
     text = data.get("text", "")
@@ -787,11 +797,11 @@ async def websocket_endpoint(websocket: WebSocket):
             if op == "observe":
                 await handle_observe(websocket, client_id, data)
                 continue
-
+            
             if op == "notification":
                 await handle_notification(websocket, client_id, data)
                 continue
-
+            
             if op == "chat":
                 await handle_chat(websocket, data)
                 continue

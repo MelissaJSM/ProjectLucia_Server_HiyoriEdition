@@ -121,59 +121,48 @@ class MySQLManager:
     # ─────────────────────────────────────────────────────────────
     # 비즈니스 로직 메서드
     # ─────────────────────────────────────────────────────────────
-
     def fetch_recent_logs(self):
-        """
-        최근 대화 기록을 조회합니다.
-        server_config의 COMMU_LOG_INTERVAL(개수)과 COMMU_LOG_TIME(시간 표시 여부)을 따릅니다.
-        """
         cur = self._cursor(dictionary=True)
         if cur is None:
-            return ""
+            return [] 
 
-        # ✨ 수정됨: 1. 설정값이 0 이하일 경우 쿼리 실행 없이 즉시 빈 문자열 반환
         if getattr(server_config.LLM, "COMMU_LOG_INTERVAL", 0) <= 0:
             self.close()
-            return ""
-
+            return [] 
+        
         try:
             query = """ \
                     SELECT user, userTime, assistant, assistantTime \
                     FROM logs \
                     ORDER BY userTime DESC \
-                        LIMIT %s \
-                    """
+                    LIMIT %s \
+            """
             cur.execute(query, (server_config.LLM.COMMU_LOG_INTERVAL,))
             logs = cur.fetchall()
             cur.close()
 
-            # ✨ 수정됨: 2. 가져온 데이터가 비어있을 경우에도 헤더/푸터 없이 빈 문자열 반환
             if not logs:
                 self.close()
-                return ""
-
-            conversation_log = []
-            conversation_log.append(
-                f"다음은 {server_config.LLM.LLM_USER_NAME}와 {server_config.LLM.LLM_CHARACTER_NAME} 당신의 이전 대화 기록입니다. 이를 참고하여 맥락을 유지하고 자연스러운 대화를 이어가세요\n <이전 대화 기록 시작|>")
+                return [] 
+            
+            # ✨ 통짜 문자열 대신 메시지 배열로 구성
+            conversation_messages = []
 
             for log in reversed(logs):
-                if server_config.LLM.COMMU_LOG_TIME:
-                    # 보너스 수정: [ ] 괄호가 한쪽만 있던 것을 양쪽으로 깔끔하게 맞췄습니다.
-                    conversation_log.append(f"[{log['userTime']}] {server_config.LLM.LLM_USER_NAME} : {log['user']}")
-                    conversation_log.append(
-                        f"[{log['assistantTime']}] {server_config.LLM.LLM_CHARACTER_NAME} : {log['assistant']}\n")
-                else:
-                    conversation_log.append(f"{server_config.LLM.LLM_USER_NAME} : {log['user']}")
-                    conversation_log.append(f"{server_config.LLM.LLM_CHARACTER_NAME} : {log['assistant']}\n")
-
-            conversation_log.append("<이전 대화 기록 끝|>")
+                user_msg = log['user']
+                assistant_msg = log['assistant']
+                
+                # 역할(role)을 명확히 분리하여 리스트에 추가
+                conversation_messages.append({"role": "user", "content": user_msg})
+                conversation_messages.append({"role": "assistant", "content": assistant_msg})
+                
             self.close()
-            return "\n".join(conversation_log)
+            return conversation_messages 
 
         except Error as e:
             print(f"❌ 데이터 가져오기 실패: {e}")
             self.close()
-            return ""
+            return [] 
 
     def feedback_call(self, number):
         """특정 로그 ID에 대한 피드백 데이터를 조회합니다."""
@@ -185,7 +174,7 @@ class MySQLManager:
                         SELECT user, userTime, assistant, assistantTime
                         FROM logs
                         WHERE id = %s
-                        """, (number,))
+                """, (number,))
             feedback = cur.fetchone()
             cur.close()
             self.close()
@@ -203,7 +192,7 @@ class MySQLManager:
             return None
 
         try:
-            cur.execute("SELECT commu_log_time, commu_log_interval FROM serverSettings LIMIT 1;")
+            cur.execute("SELECT commu_log_interval FROM serverSettings LIMIT 1;")
             result = cur.fetchone()
             cur.close()
             self.close()
@@ -221,8 +210,7 @@ class MySQLManager:
             return None
 
         try:
-            cur.execute(
-                "SELECT character_concept, command_feedback, command_search , character_name FROM serverSettings LIMIT 1;")
+            cur.execute("SELECT character_concept, command_feedback, command_search , character_name FROM serverSettings LIMIT 1;")
             result = cur.fetchone()
             cur.close()
             self.close()
@@ -240,12 +228,11 @@ class MySQLManager:
             return None
 
         try:
+            # 🟢 [삭제됨] llm_model_type, commu_log_time 쿼리 제거
             query = """ \
-                    SELECT commu_log_time, \
-                           commu_log_interval, \
+                    SELECT commu_log_interval, \
                            context_length, \
                            cpu_threads, \
-                           llm_model_type, \
                            llm_cache_quant, \
                            llm_tensor_parallel, \
                            llm_gpu_index, \
@@ -258,7 +245,7 @@ class MySQLManager:
                            llm_presence_penalty, \
                            llm_frequency_penalty \
                     FROM serverSettings LIMIT 1; \
-                    """
+            """
             cur.execute(query)
             result = cur.fetchone()
             cur.close()
@@ -292,7 +279,7 @@ class MySQLManager:
                            tts_speed_factor, \
                            tts_language \
                     FROM serverSettings LIMIT 1; \
-                    """
+            """
             cur.execute(query)
             result = cur.fetchone()
             cur.close()
@@ -314,31 +301,30 @@ class MySQLManager:
             count = cur.fetchone()[0] if hasattr(cur, "fetchone") else 0
 
             if count == 0:
+                # 🟢 [삭제됨] llm_model_type, commu_log_time 컬럼 제거
                 sql = """ \
                       INSERT INTO serverSettings \
-                      (id, commu_log_time, commu_log_interval, character_concept, command_feedback, command_search, \
-                       character_name, \
+                      (id, commu_log_interval, character_concept, command_feedback, command_search, character_name, \
                        context_length, gpu_tts, tts_enable, cpu_threads, \
-                       llm_model_type, llm_cache_quant, llm_tensor_parallel, llm_gpu_index, llm_gpu_split, \
+                       llm_cache_quant, llm_tensor_parallel, llm_gpu_index, llm_gpu_split, \
                        llm_temperature, llm_top_k, llm_top_p, llm_min_p, llm_repetition_penalty, llm_presence_penalty, \
                        llm_frequency_penalty, \
                        tts_text_split_method, tts_batch_size, tts_parallel_infer, tts_split_bucket, tts_seed, \
                        tts_top_k, tts_top_p, tts_temperature, tts_repetition_penalty, tts_speed_factor, tts_language) \
-                      VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
-                              %s, %s, %s, %s, %s, \
+                      VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
+                              %s, %s, %s, %s, \
                               %s, %s, %s, %s, %s, %s, %s, \
                               %s, %s, %s, %s, %s, \
                               %s, %s, %s, %s, %s, %s); \
-                      """
+          """
                 values = (
-                    1 if server_config.LLM.COMMU_LOG_TIME else 0,
                     server_config.LLM.COMMU_LOG_INTERVAL,
-                    "", "", "",
+                    "", "", "", "",
                     server_config.LLM.CONTEXT,
                     server_config.TTS.GPU_TTS,
                     1 if server_config.TTS.TTS_ENABLE else 0,
                     server_config.LLM.CPU_THREADS,
-                    server_config.LLM.MODEL_TYPE,
+                    # 🟢 [삭제됨] server_config.LLM.MODEL_TYPE 제거
                     server_config.LLM.CACHE_QUANT,
                     1 if server_config.LLM.TENSOR_PARALLEL else 0,
                     server_config.LLM.GPU_INDEX,
@@ -429,69 +415,65 @@ class MySQLManager:
             print("❌ MySQL 연결 실패로 설정 저장 불가")
             return None
 
+        # 🟢 [삭제됨] llm_model_type, commu_log_time 컬럼 제거
         sql = """ \
               INSERT INTO serverSettings \
-              (id, commu_log_time, commu_log_interval, character_concept, character_name, command_feedback, \
-               command_search, \
+              (id, commu_log_interval, character_concept, character_name, command_feedback, command_search, \
                context_length, gpu_tts, tts_enable, cpu_threads, \
-               llm_model_type, llm_cache_quant, llm_tensor_parallel, llm_gpu_index, llm_gpu_split, \
+               llm_cache_quant, llm_tensor_parallel, llm_gpu_index, llm_gpu_split, \
                llm_temperature, llm_top_k, llm_top_p, llm_min_p, llm_repetition_penalty, llm_presence_penalty, \
                llm_frequency_penalty, \
                tts_text_split_method, tts_batch_size, tts_parallel_infer, tts_split_bucket, tts_seed, \
                tts_top_k, tts_top_p, tts_temperature, tts_repetition_penalty, tts_speed_factor, tts_language) \
-              VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
-                      %s, %s, %s, %s, %s, \
+              VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, \
+                      %s, %s, %s, %s, \
                       %s, %s, %s, %s, %s, %s, %s, \
                       %s, %s, %s, %s, %s, \
                       %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY \
               UPDATE \
-                  commu_log_time = \
-              VALUES (commu_log_time), commu_log_interval = \
-              VALUES (commu_log_interval), character_concept = \
-              VALUES (character_concept), character_name = \
-              VALUES (character_name), command_feedback = \
-              VALUES (command_feedback), command_search = \
-              VALUES (command_search), context_length = \
-              VALUES (context_length), gpu_tts = \
-              VALUES (gpu_tts), tts_enable = \
-              VALUES (tts_enable), cpu_threads = \
-              VALUES (cpu_threads), llm_model_type = \
-              VALUES (llm_model_type), llm_cache_quant = \
-              VALUES (llm_cache_quant), llm_tensor_parallel = \
-              VALUES (llm_tensor_parallel), llm_gpu_index = \
-              VALUES (llm_gpu_index), llm_gpu_split = \
-              VALUES (llm_gpu_split), llm_temperature = \
-              VALUES (llm_temperature), llm_top_k = \
-              VALUES (llm_top_k), llm_top_p = \
-              VALUES (llm_top_p), llm_min_p = \
-              VALUES (llm_min_p), llm_repetition_penalty = \
-              VALUES (llm_repetition_penalty), llm_presence_penalty = \
-              VALUES (llm_presence_penalty), llm_frequency_penalty = \
-              VALUES (llm_frequency_penalty), tts_text_split_method = \
-              VALUES (tts_text_split_method), tts_batch_size = \
-              VALUES (tts_batch_size), tts_parallel_infer = \
-              VALUES (tts_parallel_infer), tts_split_bucket = \
-              VALUES (tts_split_bucket), tts_seed = \
-              VALUES (tts_seed), tts_top_k = \
-              VALUES (tts_top_k), tts_top_p = \
-              VALUES (tts_top_p), tts_temperature = \
-              VALUES (tts_temperature), tts_repetition_penalty = \
-              VALUES (tts_repetition_penalty), tts_speed_factor = \
-              VALUES (tts_speed_factor), tts_language = \
-              VALUES (tts_language); \
-              """
+                  commu_log_interval = VALUES(commu_log_interval), \
+                  character_concept = VALUES(character_concept), \
+                  character_name = VALUES(character_name), \
+                  command_feedback = VALUES(command_feedback), \
+                  command_search = VALUES(command_search), \
+                  context_length = VALUES(context_length), \
+                  gpu_tts = VALUES(gpu_tts), \
+                  tts_enable = VALUES(tts_enable), \
+                  cpu_threads = VALUES(cpu_threads), \
+                  llm_cache_quant = VALUES(llm_cache_quant), \
+                  llm_tensor_parallel = VALUES(llm_tensor_parallel), \
+                  llm_gpu_index = VALUES(llm_gpu_index), \
+                  llm_gpu_split = VALUES(llm_gpu_split), \
+                  llm_temperature = VALUES(llm_temperature), \
+                  llm_top_k = VALUES(llm_top_k), \
+                  llm_top_p = VALUES(llm_top_p), \
+                  llm_min_p = VALUES(llm_min_p), \
+                  llm_repetition_penalty = VALUES(llm_repetition_penalty), \
+                  llm_presence_penalty = VALUES(llm_presence_penalty), \
+                  llm_frequency_penalty = VALUES(llm_frequency_penalty), \
+                  tts_text_split_method = VALUES(tts_text_split_method), \
+                  tts_batch_size = VALUES(tts_batch_size), \
+                  tts_parallel_infer = VALUES(tts_parallel_infer), \
+                  tts_split_bucket = VALUES(tts_split_bucket), \
+                  tts_seed = VALUES(tts_seed), \
+                  tts_top_k = VALUES(tts_top_k), \
+                  tts_top_p = VALUES(tts_top_p), \
+                  tts_temperature = VALUES(tts_temperature), \
+                  tts_repetition_penalty = VALUES(tts_repetition_penalty), \
+                  tts_speed_factor = VALUES(tts_speed_factor), \
+                  tts_language = VALUES(tts_language); \
+        """
         values = (
-            1 if server_config.LLM.COMMU_LOG_TIME else 0,
             server_config.LLM.COMMU_LOG_INTERVAL,
-            server_config.LLM.LLM_CHAT_FORMAT,
-            server_config.LLM.LLM_CHARACTER_NAME,
-            server_config.LLM.LLM_FEEDBACK_FORMAT,
+            server_config.LLM.LLM_CHAT_FORMAT,       
+            server_config.LLM.LLM_CHARACTER_NAME,    
+            server_config.LLM.LLM_FEEDBACK_FORMAT,  
             server_config.LLM.LLM_RAG_SEARCH_FORMAT,
             server_config.LLM.CONTEXT,
             server_config.TTS.GPU_TTS,
             1 if server_config.TTS.TTS_ENABLE else 0,
             server_config.LLM.CPU_THREADS,
-            server_config.LLM.MODEL_TYPE,
+            # 🟢 [삭제됨] server_config.LLM.MODEL_TYPE 제거
             server_config.LLM.CACHE_QUANT,
             1 if server_config.LLM.TENSOR_PARALLEL else 0,
             server_config.LLM.GPU_INDEX,

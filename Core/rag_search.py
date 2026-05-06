@@ -110,7 +110,7 @@ def fetch_ddgs_smart(query: str, max_results: int) -> List[Dict[str, Any]]:
             if intent in ["general", "news"] and i <= 2 and url:
                 full_text = fetch_full_content(url)
                 if full_text:
-                    doc["full_content"] = full_text[:1500]
+                    doc["full_content"] = full_text[:800]
 
             docs.append(doc)
 

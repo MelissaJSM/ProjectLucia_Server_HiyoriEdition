@@ -178,7 +178,7 @@ def run():
     # [수정됨] 윈도우 작업표시줄 아이콘 분리 설정 -------------------------
     # 이 코드가 없으면 작업표시줄에는 기본 파이썬 로고가 뜹니다.
     try:
-        myappid = 'project.lucia.server.hiyori.1.0'  # 임의의 고유 ID
+        myappid = 'project.lucia.server.1.0'  # 임의의 고유 ID
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
     except Exception:
         pass  # 리눅스/맥 등에서는 무시

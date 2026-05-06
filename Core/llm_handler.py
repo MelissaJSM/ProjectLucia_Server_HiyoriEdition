@@ -26,7 +26,7 @@ db_manager = MySQLManager()
 class InputTypeValue(IntEnum):
     CHAT = 0
     FEEDBACK = 3
-    OBSERVE = 4
+    OBSERVE = 4  
     NOTIFICATION = 5  # 🔔 알림 반응 모드 (웹 검색/RAG 강제 스킵용) 추가!
 
 
@@ -38,7 +38,7 @@ def init_tokenizer():
     if GLOBAL_TOKENIZER is None:
         try:
             model_path = os.path.join(server_config.LLM.LOCATION, server_config.LLM.LOCATION_MODEL)
-            GLOBAL_TOKENIZER = AutoTokenizer.from_pretrained(model_path)
+            GLOBAL_TOKENIZER = AutoTokenizer.from_pretrained(model_path, fix_mistral_regex=True)
             print(f"✅ Tokenizer 로드 완료: {model_path}")
         except Exception as e:
             print(f"⚠️ Tokenizer 로드 실패: {e}")
@@ -66,66 +66,82 @@ def check_llm_backend_status() -> dict:
         return {"status": "down", "detail": str(e)}
 
 
-def _build_chat_messages(user_input, history_log, emotion, model_type, user_info=None, has_image=False):
+def _build_chat_messages(user_input, history_log, emotion, user_info=None, has_image=False):
+
     tz = pytz.timezone("Asia/Seoul")
     now = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
     rag_context = ""
     # 💡 이미지 없을 때 백그라운드에서 조용히 검색어(RAG)를 가져옴
     if not has_image:
-        search_result = preprocess_webrag(question=user_input, search_query=user_input, max_results_search=5,
+        # 오류 수정: max_results_search에 빈 값을 3으로 채웠습니다.
+        search_result = preprocess_webrag(question=user_input, search_query=user_input, max_results_search=3,
                                           use_embedding=True, select_top=True)
         rag_context = search_result.get("best_text", "")
-
-    rag_prompt = ""
-    if rag_context and "검색 결과가 없습니다" not in rag_context:
-        rag_prompt = (
-            f"\n\n[참고 정보 (네트워크 검색 결과)]\n{rag_context}\n"
-            "※ 위 검색 결과를 바탕으로 자연스럽게 대답해. 모르는 내용이면, 검색 결과가 없으면 '검색해 봤는데 그런 건 안 보이는데요?'라고 말해.\n"
-        )
-        print(f"🔍 RAG 정보 추가됨: {len(rag_context)} chars")
 
     if emotion and emotion.strip():
         emotion_prompt = f" 현재 대화하는 사람의 감정 상태는 {emotion} 입니다. 이를 고려하여 반응하세요."
     else:
         emotion_prompt = ""
-
+        
     time_prompt = f"현재 시간은 {now} 입니다. 시간 정보가 필요하면 이 시간을 참고해서 대화 하십시오."
-
+    
     user_info_str = ""
     if user_info:
-        # 각 정보가 없을 경우를 대비해 기본값(Default)을 설정해두면 더 안전해요!
         user_name = user_info.get("name", server_config.LLM.LLM_USER_NAME)
         user_gender = "남성" if user_info.get("gender") == "Man" else "여성"
         user_birthday = user_info.get("birth_date", "비공개")
 
-        # 루시아의 시스템 프롬프트에 들어갈 서사적인 문구로 구성
         user_info_str = f"""
-    ### [대화 하고있는 상대방  {server_config.LLM.LLM_USER_NAME}님에 대한 인적 정보 (상대방이 누군지 반드시 인지해주세요!)]
+    ### [대화 하고있는 상대방 {server_config.LLM.LLM_USER_NAME}님에 대한 인적 정보]
     - **성함(혹은 닉네임):** {user_name}
     - **성별:** {user_gender}
     - **생년월일:** {user_birthday}
     \n\n"""
 
-    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
-                                                                   characterName=server_config.LLM.LLM_CHARACTER_NAME)
+    # 1. 루시아의 기본 자아(페르소나) 호출
+    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME, characterName=server_config.LLM.LLM_CHARACTER_NAME)
+    
+    # 2. 공통 시스템 프롬프트 조립 (어떤 상황이든 무조건 유지되어야 하는 '자아'와 '기본 정보')
+    common_system_content = f"{base_system_content}{user_info_str}{time_prompt}{emotion_prompt}"
 
-    final_system_content = f"{base_system_content}{user_info_str}{time_prompt}{emotion_prompt}{rag_prompt}\n\n{history_log}"
+    # 3. RAG 적용 상태에 따른 분기 (핵심 수정 부분)
+    if rag_context and "검색 결과가 없습니다" not in rag_context:
+        # 검색 지시문(포맷)을 불러옵니다.
+        rag_instruction = server_config.LLM.LLM_RAG_SEARCH_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME, characterName=server_config.LLM.LLM_CHARACTER_NAME)
+        
+        # 💡 중요: 지시문(rag_instruction)뿐만 아니라 실제 검색 데이터(rag_context)도 함께 넣어주어야 합니다!
+        final_system_content = f"{common_system_content}\n\n[실시간 네트워크 참고 정보]\n{rag_context}\n\n[검색 관련 지시사항]\n{rag_instruction}"
+        print(f"🔍 [RAG 모드] 기본 페르소나 + 검색 데이터({len(rag_context)} chars) 적용 완료")
+    else:
+        # 검색 결과가 없으면 기본 페르소나만 깔끔하게 들어갑니다.
+        final_system_content = common_system_content
+        print(f"💬 [일반 모드] 순수 기본 페르소나 적용 (검색 결과 없음)")
 
-    if "gemma" in model_type: final_system_content += "\n\n대화시작:"
+    # 4. 최종 시스템 메시지 생성
+    messages = [{"role": "system", "content": final_system_content}]
 
-    return [{"role": "system", "content": final_system_content}, {"role": "user", "content": user_input}]
+    # 5. 과거 대화 기록 삽입
+    if isinstance(history_log, list) and history_log:
+        messages.extend(history_log)
+    elif isinstance(history_log, str) and history_log:
+        messages.append({"role": "user", "content": f"[과거 대화 요약]\n{history_log}"})
 
+    # 6. 현재 사용자 질문 추가
+    messages.append({"role": "user", "content": user_input})
 
-def _build_feedback_messages(feedback_input, log_id, model_type):
+    return messages
+    
+
+def _build_feedback_messages(feedback_input, log_id):
     feedback_data = db_manager.feedback_call(log_id)
     formatted_input = f"질문: {feedback_data['user']}\n모델의 응답 : {feedback_data['assistant']}\n피드백: {feedback_input}"
-    system_content = server_config.LLM.LLM_FEEDBACK_FORMAT
-    if "gemma" in model_type: system_content += "\n\n대화시작:"
+    system_content = server_config.LLM.LLM_FEEDBACK_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME, characterName=server_config.LLM.LLM_CHARACTER_NAME)
+    
     return [{"role": "system", "content": system_content}, {"role": "user", "content": formatted_input}]
 
 
-def _build_observe_messages(user_input, emotion, model_type, user_info=None):
+def _build_observe_messages(user_input, emotion, user_info=None):
     system_content = (
         "[시스템: 비전 분석 엔진]\n"
         "당신은 캐릭터 자아를 버리고 오직 시각적 변화를 JSON 포맷으로 출력하는 분석 엔진입니다.\n"
@@ -153,7 +169,7 @@ def _build_observe_messages(user_input, emotion, model_type, user_info=None):
 
 
 # 🔔 새로 추가된 알림 전용 메시지 빌더 (RAG 스킵)
-def _build_notification_messages(user_input, emotion, model_type, user_info=None):
+def _build_notification_messages(user_input, emotion, user_info=None):
     tz = pytz.timezone("Asia/Seoul")
     now = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -173,23 +189,20 @@ def _build_notification_messages(user_input, emotion, model_type, user_info=None
     \n\n"""
 
     # RAG 검색 결과를 넣지 않고 페르소나만 깔끔하게 넣습니다.
-    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME,
-                                                                   characterName=server_config.LLM.LLM_CHARACTER_NAME)
+    base_system_content = server_config.LLM.LLM_CHAT_FORMAT.format(userName=server_config.LLM.LLM_USER_NAME, characterName=server_config.LLM.LLM_CHARACTER_NAME)
     final_system_content = f"{user_info_str}{base_system_content}"
-
-    if "gemma" in model_type: final_system_content += "\n\n대화시작:"
 
     return [{"role": "system", "content": final_system_content}, {"role": "user", "content": user_input}]
 
 
-def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] = None, use_think: bool = False):
+def _execute_llm_request(messages, image_paths: Optional[List[str]] = None, use_think: bool = False):
     try:
         base_context = int(getattr(server_config.LLM, "CONTEXT", 4096))
     except (ValueError, TypeError):
         base_context = 4096
 
     aligned_context = ((base_context + 255) // 256) * 256
-    MIN_RESPONSE_TOKENS = 256
+    MIN_RESPONSE_TOKENS = 256  
 
     if GLOBAL_TOKENIZER:
         prompt_text = " ".join([m["content"] for m in messages])
@@ -218,12 +231,11 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
         "stream": False,
         "max_response_tokens": dynamic_max_tokens,
         "no_think": not use_think,
-        "stop": ["<end_of_turn>", "<eos>", "<|endoftext|>", "user:", "대화시작:", "<turn|>", "<|turn>", "<|/think|>",
-                 "<|tool_response>"]
+        "stop": ["<end_of_turn>", "<eos>", "<|endoftext|>", "user:", "대화시작:", "<turn|>", "<|turn>", "<|/think|>", "<|tool_response>"]
     }
 
     data = {"request_json": json.dumps(req_dict)}
-    print(f"🚀 LLM 요청 시작 (Model: {model_type} | Think 모드: {'켜짐' if use_think else '꺼짐'})")
+    print(f"🚀 LLM 요청 시작 (Model: {LLAMA_SERVER_MODEL} | Think 모드: {'켜짐' if use_think else '꺼짐'})")
 
     try:
         with ExitStack() as stack:
@@ -244,7 +256,7 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
                 response = _call_llama_server(data, files)
 
         result = response["choices"][0]["message"]["content"].strip()
-
+        
         tags_to_remove = [
             "<|channel>thought", "<channel|>", "<|channel|>",
             "<|think|>", "</|think|>", "<bos>", "<eos>",
@@ -263,34 +275,30 @@ def _execute_llm_request(messages, model_type, image_paths: Optional[List[str]] 
         raise
 
 
-def generate_llm_response(user_input, recent_conversation, inputType, emotion, image_paths: Optional[List[str]] = None,
-                          user_info: dict = None, use_think: bool = False):
-    model_type = getattr(server_config.LLM, "MODEL_TYPE", "gemma").lower()
-
+def generate_llm_response(user_input, recent_conversation, inputType, emotion, image_paths: Optional[List[str]] = None, user_info: dict = None, use_think: bool = False):
+    
     # 🟢 [1] 관찰 모드
     if inputType == InputTypeValue.OBSERVE:
-        messages = _build_observe_messages(user_input, emotion, model_type, user_info)
-        return _execute_llm_request(messages, model_type, image_paths, use_think=False)
+        messages = _build_observe_messages(user_input, emotion, user_info)
+        return _execute_llm_request(messages, image_paths, use_think=False)
 
     # 🟡 [2] 채팅 모드 (RAG 포함)
     elif inputType == InputTypeValue.CHAT:
         has_image = bool(image_paths)
-        messages = _build_chat_messages(user_input, recent_conversation, emotion, model_type, user_info,
-                                        has_image=has_image)
+        messages = _build_chat_messages(user_input, recent_conversation, emotion, user_info, has_image=has_image)
         print("💬 일반 대화 처리 (Legacy RAG 결합)")
-        print(messages)
-        return _execute_llm_request(messages, model_type, image_paths, use_think=use_think)
+        return _execute_llm_request(messages, image_paths, use_think=use_think)
 
     # 🔵 [3] 피드백 모드
     elif inputType == InputTypeValue.FEEDBACK:
-        messages = _build_feedback_messages(user_input, recent_conversation, model_type)
-        return _execute_llm_request(messages, model_type, image_paths, use_think=use_think)
+        messages = _build_feedback_messages(user_input, recent_conversation)
+        return _execute_llm_request(messages, image_paths, use_think=use_think)
 
     # 🟠 [4] 알림 모드 (새로 추가)
     elif inputType == InputTypeValue.NOTIFICATION:
-        messages = _build_notification_messages(user_input, emotion, model_type, user_info)
+        messages = _build_notification_messages(user_input, emotion, user_info)
         print("🔔 알림 반응 처리 (웹 검색 스킵 적용됨)")
-        return _execute_llm_request(messages, model_type, image_paths, use_think=use_think)
+        return _execute_llm_request(messages, image_paths, use_think=use_think)
 
     else:
         print(f"❌ 알 수 없는 inputType: {inputType}")
