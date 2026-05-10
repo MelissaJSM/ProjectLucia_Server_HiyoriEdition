@@ -43,7 +43,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 *   **Database**: MySQL (대화 로그 및 설정 저장)
 
 ### AI & ML
-*   **LLM Backend**: ExLlamaV3 (Gemma 3, Phi-4 지원)
+*   **LLM Backend**: ExLlamaV3 (Gemma-3, Gemma-4  지원)
 *   **TTS Engine**: GPT-SoVITS
 *   **Emotion Analysis**: KoELECTRA (Hugging Face Transformers)
 *   **Vision**: Multimodal LLM Integration
@@ -51,7 +51,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 ### GUI & Tools
 *   **Interface**: PyQt5 (Qt Designer)
 *   **Process Management**: QProcess, psutil
-*   **Search**: Google MCP, DuckDuckGo (ddgs)
+*   **Search**: DuckDuckGo (ddgs)
 
 ---
 
