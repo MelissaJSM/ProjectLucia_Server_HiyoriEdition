@@ -61,9 +61,9 @@ class NavController:
         
         # 필수 위젯 존재 여부 확인 (Phi4, Gemma44 잔재 제거 및 Gemma4로 통일)
         required_widgets = (
-            "Gemma3PrevButton", "Gemma3NextButton",
-            "Gemma4PrevButton", "Gemma4NextButton",
-            "Gemma3StackedWidget", "Gemma4StackedWidget"
+            "Gemma3PrevButton", "Gemma3NextButton", "Gemma3OriginPrevButton", "Gemma3OriginNextButton",
+            "Gemma4PrevButton", "Gemma4NextButton", "Gemma4OriginPrevButton", "Gemma4OriginNextButton",
+            "Gemma3StackedWidget", "Gemma4StackedWidget","Gemma3OriginStackedWidget","Gemma4OriginStackedWidget"
         )
         
         for attr in required_widgets:
@@ -80,14 +80,18 @@ class NavController:
         self.w.Gemma3NextButton.clicked.connect(self.on_gemma3_next)
         self.w.Gemma4PrevButton.clicked.connect(self.on_gemma4_prev)
         self.w.Gemma4NextButton.clicked.connect(self.on_gemma4_next)
+
+        self.w.Gemma3OriginPrevButton.clicked.connect(self.on_gemma3_origin_prev)
+        self.w.Gemma3OriginNextButton.clicked.connect(self.on_gemma3_origin_next)
+        self.w.Gemma4OriginPrevButton.clicked.connect(self.on_gemma4_origin_prev)
+        self.w.Gemma4OriginNextButton.clicked.connect(self.on_gemma4_origin_next)
+
         
         self.w.LLMAdvancedButton.clicked.connect(self.on_llm_advanced)
         self.w.LLMGeneralButton.clicked.connect(self.on_llm_general)
         
         self.w.TTSAdvancedButton.clicked.connect(self.on_tts_advanced)
         self.w.TTSGeneralButton.clicked.connect(self.on_tts_general)
-        self.w.TTSNextButton_2.clicked.connect(self.on_tts_next)
-        self.w.TTSPrevButton_2.clicked.connect(self.on_tts_prev)
 
     def _shift(self, stacked, delta: int, name: str):
         """
@@ -108,13 +112,17 @@ class NavController:
     def on_gemma4_prev(self): self._shift(self.w.Gemma4StackedWidget, -1, "Gemma4")
     def on_gemma4_next(self): self._shift(self.w.Gemma4StackedWidget, +1, "Gemma4")
 
+    def on_gemma3_origin_prev(self): self._shift(self.w.Gemma3OriginStackedWidget, -1, "Gemma3Origin")
+    def on_gemma3_origin_next(self): self._shift(self.w.Gemma3OriginStackedWidget, +1, "Gemma3Origin")
+    def on_gemma4_origin_prev(self): self._shift(self.w.Gemma4OriginStackedWidget, -1, "Gemma4Origin")
+    def on_gemma4_origin_next(self): self._shift(self.w.Gemma4OriginStackedWidget, +1, "Gemma4Origin")
+
     def on_llm_advanced(self): self._shift(self.w.LLMstackedWidget, +1, "LLM")
     def on_llm_general(self): self._shift(self.w.LLMstackedWidget, -1, "LLM")
     
     def on_tts_advanced(self): self._shift(self.w.TTSstackedWidget, +1, "TTS")
     def on_tts_general(self): self._shift(self.w.TTSstackedWidget, -1, "TTS")
-    def on_tts_next(self): self._shift(self.w.Gemma4StackedWidget_2, +1, "TTS")
-    def on_tts_prev(self): self._shift(self.w.Gemma4StackedWidget_2, -1, "TTS")
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────

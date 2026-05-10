@@ -1,5 +1,20 @@
 ﻿import sys
 import os
+
+# =====================================================================
+# [중요] FFmpeg DLL 경로 강제 인식 (윈도우 배포용 무설치 세팅)
+# 무조건 다른 라이브러리(ctypes, PyQt5 등)를 import 하기 전에 실행되어야 합니다!
+# =====================================================================
+if os.name == 'nt':  # 현재 운영체제가 윈도우일 때만 실행
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    ffmpeg_bin_path = os.path.join(base_dir, "ffmpeg")
+
+    if os.path.exists(ffmpeg_bin_path):
+        os.environ["PATH"] = ffmpeg_bin_path + os.pathsep + os.environ.get("PATH", "")
+    else:
+        print(f"[경고] 윈도우 환경: FFmpeg 내장 폴더를 찾을 수 없습니다: {ffmpeg_bin_path}")
+# =====================================================================
+
 import atexit
 import logging
 import ctypes  # <--- [중요] 윈도우 작업표시줄 아이콘 설정을 위해 추가
@@ -188,7 +203,7 @@ def run():
 
     # [수정됨] 앱 전체 기본 아이콘 설정 (안전장치)
     # MainWindow에서 설정했지만, 앱 전역으로도 설정해두면 팝업창 등에도 적용됩니다.
-    # app.setWindowIcon(QIcon('sample.png'))
+    app.setWindowIcon(QIcon('sample.png'))
 
     w = MainWindow()
 

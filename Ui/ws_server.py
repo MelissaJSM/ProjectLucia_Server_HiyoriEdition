@@ -314,9 +314,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 
 @app.get("/health")
 async def health():
-    if not SERVER_IS_READY: return JSONResponse(status_code=503, content={"status": "warming_up"})
-    return PlainTextResponse("ok")
+    if not SERVER_IS_READY:
+        return JSONResponse(status_code=503, content={"status": "warming_up"})
 
+    # 순수 텍스트 대신 JSON 형태로 응답
+    return JSONResponse(content={
+        "status": "ok",
+        "model_name": server_config.LLM.LOCATION_MODEL
+    })
 
 @app.get("/hb/state")
 async def hb_state():
