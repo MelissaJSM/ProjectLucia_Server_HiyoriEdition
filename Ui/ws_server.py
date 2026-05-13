@@ -321,7 +321,8 @@ async def health():
     # 순수 텍스트 대신 JSON 형태로 응답
     return JSONResponse(content={
         "status": "ok",
-        "model_name": server_config.LLM.LOCATION_MODEL
+        "model_name": server_config.LLM.LOCATION_MODEL,
+        "character_name": server_config.LLM.LLM_CHARACTER_NAME
     })
 
 
