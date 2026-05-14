@@ -10,11 +10,19 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+import server_config  # 이제 정상적으로 import 됩니다!
+
 # [공사 1] Hugging Face AutoTokenizer 추가 (chat_templates 제거)
 from transformers import AutoTokenizer
 
 # [Tuning] OOM 방지를 위한 PyTorch 메모리 설정
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,garbage_collection_threshold:0.8,max_split_size_mb:128"
+os.environ[
+    "PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,garbage_collection_threshold:0.8,max_split_size_mb:128"
 
 try:
     from exllamav3 import model_init, Generator, Model
@@ -57,10 +65,11 @@ args = None
 model = None
 config = None
 cache = None
-tokenizer = None # ExLlama 내부 토크나이저 (토큰 ID 변환용)
-hf_tokenizer = None # [공사 2] HF 토크나이저 추가 (프롬프트 템플릿용)
+tokenizer = None  # ExLlama 내부 토크나이저 (토큰 ID 변환용)
+hf_tokenizer = None  # [공사 2] HF 토크나이저 추가 (프롬프트 템플릿용)
 vision_model = None
 generator = None
+
 
 # =====================================================================
 # 2. 데이터 모델 (Pydantic)
@@ -69,6 +78,7 @@ class Message(BaseModel):
     role: str
     content: str
 
+
 class ChatRequestConfig(BaseModel):
     messages: List[Message]
     max_tokens: int = Field(default=1000, alias="max_response_tokens")
@@ -76,7 +86,7 @@ class ChatRequestConfig(BaseModel):
     thinking_budget: Optional[int] = None
     no_think: bool = False
     tools: Optional[List[Dict[str, Any]]] = None
-    
+
     temperature: Optional[float] = None
     top_k: Optional[int] = None
     top_p: Optional[float] = None
@@ -86,15 +96,17 @@ class ChatRequestConfig(BaseModel):
     frequency_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
 
+
 # =====================================================================
 # 3. FastAPI 서버 설정
 # =====================================================================
 app = FastAPI(title="ExLlamaV3 Binary Vision Server")
 
+
 @app.post("/v1/chat/completions")
 async def chat_endpoint_binary(
-    images: List[UploadFile] = File(None),
-    request_json: str = Form(...)
+        images: List[UploadFile] = File(None),
+        request_json: str = Form(...)
 ):
     global generator, tokenizer, hf_tokenizer, vision_model, args
 
@@ -140,8 +152,8 @@ async def chat_endpoint_binary(
 
         # HF 토크나이저로 템플릿 적용 (Jinja 템플릿 기반으로 완벽한 형태 생성)
         full_prompt = hf_tokenizer.apply_chat_template(
-            messages_for_template, 
-            tokenize=False, 
+            messages_for_template,
+            tokenize=False,
             add_generation_prompt=True
         )
 
@@ -164,7 +176,7 @@ async def chat_endpoint_binary(
         stop_conditions = [tokenizer.eos_token_id]
         if hasattr(hf_tokenizer, "eos_token") and hf_tokenizer.eos_token:
             stop_conditions.append(hf_tokenizer.eos_token)
-            
+
         # 자주 쓰이는 찌꺼기 방지용 하드코딩 정지 토큰 추가
         for stop_str in ["<|eot_id|>", "<|im_end|>", "<end_of_turn>", "</s>", "user\n", "user:", "User:"]:
             stop_conditions.append(stop_str)
@@ -181,7 +193,7 @@ async def chat_endpoint_binary(
             sampler=sampler,
             stop_conditions=stop_conditions,
             embeddings=image_embeddings if image_embeddings else None,
-            add_bos=False, # HF 템플릿이 이미 BOS를 처리함
+            add_bos=False,  # HF 템플릿이 이미 BOS를 처리함
             encode_special_tokens=True,
             decode_special_tokens=True
         )
@@ -218,6 +230,7 @@ async def chat_endpoint_binary(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # =====================================================================
 # 메인 실행 블록
 # =====================================================================
@@ -237,19 +250,25 @@ if __name__ == "__main__":
             try:
                 target_indices = [int(idx.strip()) for idx in args.gpu_index.split(",")]
                 all_splits = [val.strip() for val in args.gpu_split.split(",")]
-                
+
                 filtered_splits = []
                 for idx in target_indices:
                     if idx < len(all_splits):
                         filtered_splits.append(all_splits[idx])
                     else:
-                        filtered_splits.append("24.0") 
-                
+                        filtered_splits.append("24.0")
+
                 args.gpu_split = ",".join(filtered_splits)
                 print(f"✅ 최종 적용된 gpu_split: {args.gpu_split}")
-                
+
             except Exception as e:
                 print(f"❌ gpu_split 필터링 중 오류 발생: {e}")
+
+    model_name_lower = (server_config.LLM.LOCATION_MODEL).lower()
+    if "gemma-4" in model_name_lower or "gemma4" in model_name_lower:
+        print("⚠️ [우회 적용] Gemma-4 모델 감지됨: 멀티모달 OOM 및 어텐션 버그 방지를 위해 Flash Attention을 차단합니다.")
+        # ExLlamaV3의 args 객체에 no_flash_attn 속성을 강제로 주입/True 설정
+        setattr(args, "no_flash_attn", True)
 
     # 모델 & ExLlama 내부 토크나이저 로딩
     print(f"⏳ 모델 로딩 시작... {args.model_dir}")
