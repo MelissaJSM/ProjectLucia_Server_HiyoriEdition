@@ -776,7 +776,7 @@ async def handle_feedback(websocket: WebSocket, data: dict):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     print("⏳ Waiting for internal services to be ready before accepting WS...")
-    is_ready = await wait_for_services(timeout=60)
+    is_ready = await wait_for_services(timeout=120)
 
     if not is_ready:
         print("⚠️ Connection rejected: Internal services not ready.")
