@@ -64,6 +64,39 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 *   **GPU**: NVIDIA GPU (CUDA 12.8+ 권장, VRAM 12GB 이상 권장)
 *   **Database**: MySQL Server 설치 및 실행 필요
 
+*   1. 최소 사양 (Minimum Spec)
+목표: Gemma-3 4B 모델(4bit~8bit) 또는 12B(2bit) 모델을 구동하면서 GPT-SoVITS로 음성을 출력할 수 있는 마지노선.
+
+실제 필요 VRAM: 약 8.1GB ~ 10.3GB (모델 5~7GB + TTS 3GB)
+
+GPU: NVIDIA RTX 3060 (12GB) 또는 RTX 4060 Ti (16GB)
+
+이유: VRAM이 8GB인 그래픽카드(RTX 3050, 4060 8GB 등)는 4B 4bit(약 8.1GB 요구) 구동 시 VRAM이 가득 차서 OOM(Out of Memory) 에러가 나거나 속도가 심각하게 저하될 수 있습니다. 12GB 이상의 VRAM을 갖춘 메인스트림 GPU가 필수입니다.
+
+시스템 RAM: 32GB (모델 로딩 및 백그라운드 프로세스 여유 확보)
+
+*  2. 권장 사양 (Recommended Spec)
+목표: 가장 효율이 좋은 Sweet Spot 구간인 Gemma-3 12B(4bit~8bit) 모델을 쾌적하게 구동하며 TTS를 병행하는 환경.
+
+실제 필요 VRAM: 약 12.8GB ~ 17.8GB (모델 9~14GB + TTS 3GB)
+
+GPU: NVIDIA RTX 4070 Ti SUPER (16GB) 또는 RTX 4080 (16GB)
+
+이유: 기존 12B 4bit는 12GB GPU(RTX 3080/4070)로 가능했지만, TTS가 3GB를 차지하면 총 12.8GB가 필요하므로 12GB VRAM으로는 부족합니다. 16GB VRAM을 탑재한 모델이 권장됩니다.
+
+시스템 RAM: 64GB
+
+*  3. 하이엔드/타협 없는 사양 (High-End Spec)
+목표: Gemma-3 27B / Gemma-4 31B (4bit~6bit) 수준의 고성능 대형 모델과 TTS를 병행하는 환경.
+
+실제 필요 VRAM: 약 21.6GB ~ 27.5GB (모델 18~24GB + TTS 3GB)
+
+GPU: NVIDIA RTX 3090 (24GB) 또는 RTX 4090 (24GB)
+
+이유: 27B 4bit 모델이 TTS와 합쳐 약 21.6GB를 소모하므로 24GB GPU에서 매우 안정적으로 돌아갑니다. 단, 27B 6bit(약 24.5GB+3GB)나 31B 8bit 구동 시에는 단일 24GB로는 불가능하며 3090 2way(NVLink)나 Mac Studio(통합 메모리 64GB 이상)가 필요합니다.
+
+시스템 RAM: 64GB ~ 128GB
+
 ### 2. 클론 및 패키지 설치
 
 # 가상 환경 생성 (아나콘다 혹은 직접)
