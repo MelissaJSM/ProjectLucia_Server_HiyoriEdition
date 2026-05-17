@@ -1,5 +1,7 @@
 # Project Lucia Server
 
+[![YouTube Playlist](https://img.shields.io/badge/YouTube-재생목록_보기-red?style=for-the-badge&logo=youtube)](https://youtu.be/SkylnPtca3g?list=PLraK8WBiwejO1oeHq9y3W5iO0dZl5q2k8)
+
 **Project Lucia Server**는 실시간 멀티모달 AI 비서 'Lucia'를 위한 고성능 로컬 백엔드 서버 및 관리 도구입니다.  
 LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 분석 기능을 통합하여 사용자에게 자연스럽고 생동감 있는 상호작용을 제공합니다.
 
