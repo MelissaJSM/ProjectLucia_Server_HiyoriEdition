@@ -1,5 +1,7 @@
 # Project Lucia Server
 
+[![Video Label](https://img.youtube.com/vi/KxQ4wF3SLFs/0.jpg)](https://youtu.be/KxQ4wF3SLFs?si=Z7xgRf3Sv3hVZyWP)
+
 [![YouTube Playlist](https://img.shields.io/badge/YouTube-재생목록_보기-red?style=for-the-badge&logo=youtube)](https://youtube.com/playlist?list=PLraK8WBiwejOsRe2IAuZxSVbEtGLSugja&si=tWgnEIQxzpvgoqdu)
 
 **Project Lucia Server**는 실시간 멀티모달 AI 비서 'Lucia'를 위한 고성능 로컬 백엔드 서버 및 관리 도구입니다.  
