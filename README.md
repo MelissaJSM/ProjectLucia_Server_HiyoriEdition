@@ -64,24 +64,32 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 *   **GPU**: NVIDIA GPU (CUDA 12.8+ 권장, VRAM 12GB 이상 권장)
 *   **Database**: MySQL Server 설치 및 실행 필요
   
-#### 🖥️ 시스템 권장 사양 (GPT-SoVITS 병렬 구동 기준)
+#### 🖥️ 시스템 요구 사양 (GPT-SoVITS 병렬 구동 기준)
+TTS 모델(약 3GB)이 상시 VRAM을 점유하므로 이를 고려한 사양입니다.
 
 *   **1. 최소 사양 (Minimum Spec)**
-    *   **목표:** Gemma-3 4B 모델(4bit~8bit) 또는 12B(2bit) 모델 구동 및 TTS 음성 출력
-    *   **필요 VRAM:** 약 8.1GB ~ 10.3GB (모델 5~7GB + TTS 3GB)
+    *   **목표:** 초경량 모델(Gemma-3 270M 또는 1B) 구동 및 TTS 음성 출력
+    *   **필요 VRAM:** 약 4.5GB ~ 5.3GB (모델 1.5~2.3GB + TTS 3GB)
+    *   **권장 GPU:** **NVIDIA GTX 1660 Super (6GB) 또는 RTX 3050 / 4060 (8GB)**
+    *   **시스템 RAM:** 16GB 이상
+    > **💡 참고:** 가장 가벼운 270M이나 1B 모델을 사용할 경우, VRAM 6~8GB 수준의 보급형 게이밍 노트북이나 데스크탑에서도 무리 없이 구동 가능합니다.
+
+*   **2. 표준 사양 (Standard Spec)**
+    *   **목표:** 경량 모델(Gemma-3 4B) 구동 및 TTS 병행
+    *   **필요 VRAM:** 약 8.1GB ~ 9.6GB (모델 5~6.6GB + TTS 3GB)
     *   **권장 GPU:** **NVIDIA RTX 3060 (12GB) 또는 RTX 4060 Ti (16GB)**
     *   **시스템 RAM:** 32GB 이상
-    > **💡 참고:** VRAM 8GB GPU(RTX 3050, 4060 등)는 4B 4bit(약 8.1GB 요구) 구동 시 VRAM이 가득 차서 OOM(Out of Memory) 에러가 발생하거나 속도가 심각하게 저하될 수 있으므로, 12GB 이상 메인스트림 GPU를 권장합니다.
+    > **💡 참고:** 4B 모델부터는 VRAM 8GB GPU 사용 시 메모리 부족(OOM)이 발생하거나 속도가 저하될 수 있으므로 12GB 이상의 메인스트림 GPU를 권장합니다.
 
-*   **2. 권장 사양 (Recommended Spec)**
-    *   **목표:** 가장 효율이 좋은 Sweet Spot 구간인 Gemma-3 12B(4bit~8bit) 모델 구동 및 TTS 병행
+*   **3. 권장 사양 (Recommended Spec)**
+    *   **목표:** 가장 효율이 좋은 Sweet Spot 구간(Gemma-3 12B) 구동 및 TTS 병행
     *   **필요 VRAM:** 약 12.8GB ~ 17.8GB (모델 9~14GB + TTS 3GB)
     *   **권장 GPU:** **NVIDIA RTX 4070 Ti SUPER (16GB) 또는 RTX 4080 (16GB)**
     *   **시스템 RAM:** 64GB 이상
-    > **💡 참고:** 기존 12B 4bit는 12GB GPU로 가능했으나, TTS(3GB) 병행 시 총 12.8GB가 필요하므로 16GB VRAM 탑재 모델이 권장됩니다.
+    > **💡 참고:** 기존 12B 4bit는 12GB GPU로 가능했으나, TTS(3GB) 병행 시 총 12.8GB가 필요하므로 16GB VRAM 탑재 모델이 안정적입니다.
 
-*   **3. 하이엔드 사양 (High-End Spec)**
-    *   **목표:** Gemma-3 27B / Gemma-4 31B (4bit~6bit) 고성능 대형 모델 구동 및 TTS 병행
+*   **4. 하이엔드 사양 (High-End Spec)**
+    *   **목표:** 대형 모델(Gemma-3 27B / Gemma-4 31B) 구동 및 TTS 병행
     *   **필요 VRAM:** 약 21.6GB ~ 27.5GB (모델 18~24GB + TTS 3GB)
     *   **권장 GPU:** **NVIDIA RTX 3090 (24GB) 또는 RTX 4090 (24GB)**
     *   **시스템 RAM:** 64GB ~ 128GB
