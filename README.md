@@ -86,7 +86,7 @@ TTS 모델(약 3GB)이 상시 VRAM을 점유하므로 이를 고려한 사양입
     *   **필요 VRAM:** 약 12.8GB ~ 17.8GB (모델 9~14GB + TTS 3GB)
     *   **권장 GPU:** **NVIDIA RTX 4070 Ti SUPER (16GB) 또는 RTX 4080 (16GB)**
     *   **시스템 RAM:** 64GB 이상
-    > **💡 참고:** 기존 12B 4bit는 12GB GPU로 가능했으나, TTS(3GB) 병행 시 총 12.8GB가 필요하므로 16GB VRAM 탑재 모델이 안정적입니다.
+    > **💡 참고:** 기존 12B 4bit는 12GB GPU로 가능했으나, TTS(3GB) 병행 시 총 15.8GB가 필요하므로 16GB VRAM 탑재 모델이 안정적입니다.
 
 *   **4. 하이엔드 사양 (High-End Spec)**
     *   **목표:** 대형 모델(Gemma-3 27B / Gemma-4 31B) 구동 및 TTS 병행
