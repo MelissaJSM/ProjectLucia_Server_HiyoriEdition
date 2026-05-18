@@ -1,5 +1,9 @@
 # Project Lucia Server
 
+[![Video Label](https://img.youtube.com/vi/KxQ4wF3SLFs/0.jpg)](https://youtu.be/KxQ4wF3SLFs?si=Z7xgRf3Sv3hVZyWP)
+
+[![YouTube Playlist](https://img.shields.io/badge/YouTube-재생목록_보기-red?style=for-the-badge&logo=youtube)](https://youtube.com/playlist?list=PLraK8WBiwejOsRe2IAuZxSVbEtGLSugja&si=tWgnEIQxzpvgoqdu)
+
 **Project Lucia Server**는 실시간 멀티모달 AI 비서 'Lucia'를 위한 고성능 로컬 백엔드 서버 및 관리 도구입니다.  
 LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 분석 기능을 통합하여 사용자에게 자연스럽고 생동감 있는 상호작용을 제공합니다.
 
@@ -61,7 +65,38 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 *   **OS**: Ubuntu 22.04 (Windows 호환 가능)
 *   **GPU**: NVIDIA GPU (CUDA 12.8+ 권장, VRAM 12GB 이상 권장)
 *   **Database**: MySQL Server 설치 및 실행 필요
+  
+#### 🖥️ 시스템 요구 사양 (GPT-SoVITS 병렬 구동 기준)
+TTS 모델(약 3GB)이 상시 VRAM을 점유하므로 이를 고려한 사양입니다.
 
+*   **1. 최소 사양 (Minimum Spec)**
+    *   **목표:** 초경량 모델(Gemma-3 270M 또는 1B) 구동 및 TTS 음성 출력
+    *   **필요 VRAM:** 약 4.5GB ~ 5.3GB (모델 1.5~2.3GB + TTS 3GB)
+    *   **권장 GPU:** **NVIDIA GTX 1660 Super (6GB) 또는 RTX 3050 / 4060 (8GB)**
+    *   **시스템 RAM:** 16GB 이상
+    > **💡 참고:** 가장 가벼운 270M이나 1B 모델을 사용할 경우, VRAM 6~8GB 수준의 보급형 게이밍 노트북이나 데스크탑에서도 무리 없이 구동 가능합니다.
+
+*   **2. 표준 사양 (Standard Spec)**
+    *   **목표:** 경량 모델(Gemma-3 4B) 구동 및 TTS 병행
+    *   **필요 VRAM:** 약 8.1GB ~ 9.6GB (모델 5~6.6GB + TTS 3GB)
+    *   **권장 GPU:** **NVIDIA RTX 3060 (12GB) 또는 RTX 4060 Ti (16GB)**
+    *   **시스템 RAM:** 32GB 이상
+    > **💡 참고:** 4B 모델부터는 VRAM 8GB GPU 사용 시 메모리 부족(OOM)이 발생하거나 속도가 저하될 수 있으므로 12GB 이상의 메인스트림 GPU를 권장합니다.
+
+*   **3. 권장 사양 (Recommended Spec)**
+    *   **목표:** 가장 효율이 좋은 Sweet Spot 구간(Gemma-3 12B) 구동 및 TTS 병행
+    *   **필요 VRAM:** 약 12.8GB ~ 17.8GB (모델 9~14GB + TTS 3GB)
+    *   **권장 GPU:** **NVIDIA RTX 4070 Ti SUPER (16GB) 또는 RTX 4080 (16GB)**
+    *   **시스템 RAM:** 64GB 이상
+    > **💡 참고:** 기존 12B 4bit는 12GB GPU로 가능했으나, TTS(3GB) 병행 시 총 15.8GB가 필요하므로 16GB VRAM 탑재 모델이 안정적입니다.
+
+*   **4. 하이엔드 사양 (High-End Spec)**
+    *   **목표:** 대형 모델(Gemma-3 27B / Gemma-4 31B) 구동 및 TTS 병행
+    *   **필요 VRAM:** 약 21.6GB ~ 27.5GB (모델 18~24GB + TTS 3GB)
+    *   **권장 GPU:** **NVIDIA RTX 3090 (24GB) 또는 RTX 4090 (24GB)**
+    *   **시스템 RAM:** 64GB ~ 128GB
+    > **💡 참고:** 27B 4bit 모델은 단일 24GB GPU에서 원활히 동작합니다. 단, 27B 6bit 이상이나 31B 8bit 구동 시에는 3090 2way(NVLink) 또는 Mac Studio(통합 메모리 64GB 이상)가 필요합니다.
+    
 ### 2. 클론 및 패키지 설치
 
 # 가상 환경 생성 (아나콘다 혹은 직접)
