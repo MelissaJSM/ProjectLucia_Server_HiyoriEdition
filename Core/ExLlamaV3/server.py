@@ -10,6 +10,9 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
+import asyncio
+from starlette.concurrency import run_in_threadpool
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
@@ -69,6 +72,7 @@ tokenizer = None  # ExLlama 내부 토크나이저 (토큰 ID 변환용)
 hf_tokenizer = None  # [공사 2] HF 토크나이저 추가 (프롬프트 템플릿용)
 vision_model = None
 generator = None
+gpu_lock = asyncio.Lock()
 
 
 # =====================================================================
@@ -185,20 +189,26 @@ async def chat_endpoint_binary(
         if req.stop:
             stop_conditions.extend(req.stop)
 
+        # (기존 코드) stop_conditions 병합 로직 아래...
+
         t_gen_start = time.time()
 
-        output = generator.generate(
-            prompt=full_prompt,
-            max_new_tokens=req.max_tokens,
-            sampler=sampler,
-            stop_conditions=stop_conditions,
-            embeddings=image_embeddings if image_embeddings else None,
-            add_bos=False,  # HF 템플릿이 이미 BOS를 처리함
-            encode_special_tokens=True,
-            decode_special_tokens=True
-        )
+        # ✅ 수정된 부분: Lock 획득 및 Threadpool을 통한 비동기 실행
+        async with gpu_lock:
+            output = await run_in_threadpool(
+                generator.generate,
+                prompt=full_prompt,
+                max_new_tokens=req.max_tokens,
+                sampler=sampler,
+                stop_conditions=stop_conditions,
+                embeddings=image_embeddings if image_embeddings else None,
+                add_bos=False,
+                encode_special_tokens=True,
+                decode_special_tokens=True
+            )
 
         t_end = time.time()
+        # (기존 코드) 결과 처리 로직 이어짐...
 
         # 5. 결과 처리
         answer = output[len(full_prompt):]
