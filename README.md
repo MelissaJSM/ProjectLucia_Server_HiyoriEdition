@@ -42,7 +42,7 @@ LLM(대규모 언어 모델), TTS(음성 합성), Vision(화면 인식), 감정 
 ## 🛠 기술 스택
 
 ### Core
-*   **Language**: Python 3.10+
+*   **Language**: Python 3.13+
 *   **Framework**: FastAPI (WebSocket & REST API)
 *   **Database**: MySQL (대화 로그 및 설정 저장)
 
