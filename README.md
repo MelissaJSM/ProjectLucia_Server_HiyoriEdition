@@ -99,7 +99,7 @@ TTS 모델(약 3GB)이 상시 VRAM을 점유하므로 이를 고려한 사양입
     
 ### 2. 클론 및 패키지 설치
 
-# 서버 기본 환경 구성 (아나콘다, 도커 혹은 직접)
+# 서버 기본 환경 구성 (아나콘다, 도커 혹은 직접) 반드시 해주세요!
 [(설치 환경 가이드)](https://github.com/MelissaJSM/ProjectLucia_Finetuning_Server#%EF%B8%8F-project-lucia-server-guide) 를 따라하시면 환경 생성이 가능합니다.
 
 # 깃 클론
