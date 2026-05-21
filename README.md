@@ -119,6 +119,8 @@ MySQL을 설치 한 후 DB.SQL 파일을 임포트하여 구성합니다.
 
 ## 🚀 사용 방법
 
+[서버 사용 방법 동영상 보기](https://youtu.be/PZabJNc41gE?si=jYFaETcTdodJGtic)
+
 ### 1. 관리 도구 실행
 프로젝트 루트에서 다음 명령어로 GUI를 실행합니다.
 ```bash
