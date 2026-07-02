@@ -280,6 +280,10 @@ if __name__ == "__main__":
         # ExLlamaV3의 args 객체에 no_flash_attn 속성을 강제로 주입/True 설정
         setattr(args, "no_flash_attn", True)
 
+    # mtp 는 gemma 에선 안쓰이므로
+    if not hasattr(args, 'mtp'):
+        setattr(args, 'mtp', False)
+    
     # 모델 & ExLlama 내부 토크나이저 로딩
     print(f"⏳ 모델 로딩 시작... {args.model_dir}")
     try:
