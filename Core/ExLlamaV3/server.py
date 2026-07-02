@@ -274,11 +274,11 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"❌ gpu_split 필터링 중 오류 발생: {e}")
 
-    model_name_lower = (server_config.LLM.LOCATION_MODEL).lower()
-    if "gemma-4" in model_name_lower or "gemma4" in model_name_lower:
-        print("⚠️ [우회 적용] Gemma-4 모델 감지됨: 멀티모달 OOM 및 어텐션 버그 방지를 위해 Flash Attention을 차단합니다.")
-        # ExLlamaV3의 args 객체에 no_flash_attn 속성을 강제로 주입/True 설정
-        setattr(args, "no_flash_attn", True)
+    # model_name_lower = (server_config.LLM.LOCATION_MODEL).lower()
+    # if "gemma-4" in model_name_lower or "gemma4" in model_name_lower:
+    #     print("⚠️ [우회 적용] Gemma-4 모델 감지됨: 멀티모달 OOM 및 어텐션 버그 방지를 위해 Flash Attention을 차단합니다.")
+    #     # ExLlamaV3의 args 객체에 no_flash_attn 속성을 강제로 주입/True 설정
+    #     setattr(args, "no_flash_attn", True)
 
     # mtp 는 gemma 에선 안쓰이므로
     if not hasattr(args, 'mtp'):
